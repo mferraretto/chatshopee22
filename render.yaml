@@ -1,0 +1,24 @@
+services:
+  - type: worker
+    name: duoke-bot
+    env: docker
+    plan: starter
+    autoDeploy: true
+    startCommand: python -m src.run_loop
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+  - type: web
+    name: duoke-console
+    env: docker
+    plan: starter
+    autoDeploy: true
+    startCommand: uvicorn app_ui:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      # Se seu settings ler envs, você pode já definir aqui:
+      # - key: DOUKE_URL
+      #   value: "https://seu-duoke-url"
