@@ -40,6 +40,9 @@ class DuokeBot:
         self.current_page = None
         # Sinaliza quando ficou parado aguardando 2FA
         self.awaiting_2fa = False
+        # Evento simples para pausar/retomar o ciclo via UI
+        self.pause_event = asyncio.Event()
+        self.pause_event.set()
 
     # ---------- infra de navegador ----------
 
@@ -729,6 +732,7 @@ class DuokeBot:
             total = min(total, max_convs)
 
         for i in range(total):
+            await self.pause_event.wait()
             try:
                 ok = await self.open_conversation_by_index(page, i)
                 if not ok:
@@ -737,6 +741,8 @@ class DuokeBot:
                 print(f"[DEBUG] falha ao abrir conversa {i}: {e}")
                 continue
 
+            await self.pause_event.wait()
+
             try:
                 order_info = await self.read_sidebar_order_info(page)
                 print("[DEBUG] Order info:", order_info)
@@ -744,18 +750,13 @@ class DuokeBot:
                 order_info = {}
                 print(f"[DEBUG] falha ao ler order_info: {e}")
 
-            pairs = await self.read_messages_with_roles(page, int(getattr(settings, "history_depth", 5) or 5))
+            depth = int(getattr(settings, "history_depth", 8) or 8)
+            pairs = await self.read_messages_with_roles(page, depth * 2)
             print(f"[DEBUG] conversa {i}: {len(pairs)} msgs (com role)")
             if not pairs:
                 continue
 
-            # responder apenas se a última mensagem for do comprador
-            last_role, _ = pairs[-1]
-            if last_role != "buyer":
-                print("[DEBUG] pulando: última mensagem não é do comprador")
-                continue
-
-            buyer_only = [t for r, t in pairs if r == "buyer"]
+            buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
 
             should = False
             reply = ""
