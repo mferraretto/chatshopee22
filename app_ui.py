@@ -27,6 +27,7 @@ from src.rules import load_rules, save_rules
 RUNNING: bool = False
 LAST_ERR: Optional[str] = None
 LOGS = deque(maxlen=4000)
+MANUAL: bool = False
 
 def log(line: str):
     s = f"[{time.strftime('%H:%M:%S')}] {line}"
@@ -111,6 +112,11 @@ HTML = Template(r"""
           <div class="row" style="margin-top:8px;">
             <button id="sendBtn">Enviar</button>
             <button id="skipBtn" class="secondary">Pular</button>
+          </div>
+
+          <div class="row" style="margin-top:8px;">
+            <button id="btnTakeControl" class="secondary">Assumir controle</button>
+            <button id="btnReleaseControl" class="secondary" disabled>Voltar</button>
           </div>
 
           <div class="row" style="margin-top:8px;">
@@ -274,6 +280,19 @@ document.getElementById('sendBtn').onclick = async () => {
 document.getElementById('skipBtn').onclick = async () => {
   await fetch('/action/skip', {method:'POST'});
 }
+
+const takeBtn = document.getElementById('btnTakeControl');
+const releaseBtn = document.getElementById('btnReleaseControl');
+takeBtn.onclick = async () => {
+  await fetch('/action/take-control', {method:'POST'});
+  takeBtn.disabled = true;
+  releaseBtn.disabled = false;
+};
+releaseBtn.onclick = async () => {
+  await fetch('/action/release-control', {method:'POST'});
+  takeBtn.disabled = false;
+  releaseBtn.disabled = true;
+};
 
 document.getElementById('btnCloseModal').onclick = async () => {
   await fetch('/action/close-modal', {method:'POST'});
@@ -720,4 +739,26 @@ async def action_submit_code(req: Request):
             return JSONResponse({"ok": False, "error": str(e)})
     elif not code:
         return JSONResponse({"ok": False, "error": "Código vazio."})
+    return JSONResponse({"ok": True})
+
+
+@app.post("/action/take-control")
+async def action_take_control():
+    global MANUAL
+    bot = _bot
+    if bot:
+        bot.pause_event.clear()
+    MANUAL = True
+    log("[UI] controle manual ativado.")
+    return JSONResponse({"ok": True})
+
+
+@app.post("/action/release-control")
+async def action_release_control():
+    global MANUAL
+    bot = _bot
+    if bot:
+        bot.pause_event.set()
+    MANUAL = False
+    log("[UI] controle manual desativado.")
     return JSONResponse({"ok": True})
