@@ -391,6 +391,20 @@ class DuokeBot:
         except Exception:
             pass
 
+    async def show_all_conversations(self, page):
+        """Garante que todas as conversas estejam visíveis, removendo filtros como 'Precisa responder'."""
+        try:
+            sel = SEL.get("filter_all_conversations", "")
+            if not sel:
+                return
+            locator = page.locator(sel)
+            if await locator.count() > 0:
+                await locator.first.click()
+                await page.wait_for_timeout(1000)
+        except Exception:
+            # Não deve interromper o fluxo se o seletor não existir ou falhar
+            pass
+
     # ---------- navegação entre conversas ----------
 
     def conversations(self, page):
@@ -720,7 +734,8 @@ class DuokeBot:
             await asyncio.sleep(1)
             return
 
-        await self.apply_needs_reply_filter(page)
+        # Garante que conversas cujo último envio foi do vendedor também apareçam
+        await self.show_all_conversations(page)
 
         conv_locator = self.conversations(page)
         await page.wait_for_timeout(300)

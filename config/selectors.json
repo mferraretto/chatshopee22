@@ -17,6 +17,7 @@
   "send_button": "button:has-text('Send'), button:has-text('Enviar')",
 
   "filter_needs_reply": "text=Precisa responder, text=Need Reply, text=Pending Reply",
+  "filter_all_conversations": "text=Todos, text=All, text=All messages, text=Todas",
 
   "tag_modal": ".el-dialog.select_label_dialog, .el-dialog:has(.select_label_content), .el-dialog__wrapper:has(.select_label_content)",
 
