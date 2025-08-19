@@ -573,6 +573,24 @@ class DuokeBot:
 
     # ---------- envio de resposta ----------
 
+    def note_missing_piece(self, order_info: dict) -> None:
+        """Anota pedido e nome do cliente para envio de peça faltante."""
+        try:
+            fields = order_info.get("fields", {}) or {}
+            name = (
+                fields.get("comprador")
+                or fields.get("buyer")
+                or fields.get("nome")
+                or fields.get("cliente")
+                or ""
+            )
+            order_id = order_info.get("orderId", "")
+            log_path = Path(__file__).resolve().parents[1] / "missing_piece_log.txt"
+            with log_path.open("a", encoding="utf-8") as fh:
+                fh.write(f"{order_id} - {name}\n")
+        except Exception as e:
+            print(f"[DEBUG] falha ao anotar peça faltante: {e}")
+
     async def send_reply(self, page, text: str):
         candidates = [s.strip() for s in SEL.get("input_textarea", "").split(",") if s.strip()]
         box = None
@@ -808,6 +826,8 @@ class DuokeBot:
                 )
 
             await self.send_reply(page, reply)
+            if "ja estamos enviando a peca que faltou" in reply.lower():
+                self.note_missing_piece(order_info)
             await page.wait_for_timeout(int(getattr(settings, "delay_between_actions", 1.0) * 1000))
 
     async def run_once(self, decide_reply_fn):
