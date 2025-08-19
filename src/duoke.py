@@ -6,9 +6,11 @@ import re
 import json
 from pathlib import Path
 from typing import Optional, Tuple
+import time
 
 from playwright.async_api import async_playwright, Error as PwError, TimeoutError as PWTimeoutError
 from .config import settings
+from .classifier import RESP_FALLBACK_CURTO
 
 # Carrega seletores configuráveis
 SEL = json.loads(
@@ -43,6 +45,8 @@ class DuokeBot:
         # Evento simples para pausar/retomar o ciclo via UI
         self.pause_event = asyncio.Event()
         self.pause_event.set()
+        # Registro de última resposta por conversa
+        self.last_replied_at: dict[str, float] = {}
 
     # ---------- infra de navegador ----------
 
@@ -69,12 +73,12 @@ class DuokeBot:
             ],
         )
 
-        # Bloqueia fontes/mídia/analytics e evita travas; resiliente a exceções
+        # Bloqueia mídia/analytics e evita travas; resiliente a exceções
         async def _route_handler(route):
             req = route.request
             try:
                 url = req.url.lower()
-                if req.resource_type in {"font", "media"} or "analytics" in url or "font" in url:
+                if req.resource_type in {"media"} or "analytics" in url:
                     await route.abort()
                 else:
                     await route.continue_()
@@ -89,7 +93,7 @@ class DuokeBot:
         await ctx.route("**/*", _route_handler)
 
         # injeta CSS para não depender de animações/transitions que atrasam cliques
-        ctx.add_init_script("""
+        await ctx.add_init_script("""
         (() => {
           const style = document.createElement('style');
           style.innerHTML = '*{animation:none!important;transition:none!important;}';
@@ -101,7 +105,7 @@ class DuokeBot:
     async def _get_page(self, ctx):
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         self.current_page = page
-        page.set_default_timeout(6000)
+        page.set_default_timeout(10000)
         return page
 
     # ---------- utilitários de login / 2FA ----------
@@ -773,6 +777,13 @@ class DuokeBot:
 
             buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
 
+            conv_key = order_info.get("orderId") or "|".join(buyer_only[-2:]) or str(i)
+            now = time.time()
+            last = self.last_replied_at.get(conv_key)
+            if last and now - last < 180:
+                print(f"[DEBUG] pulando conversa já respondida recentemente: {conv_key}")
+                continue
+
             should = False
             reply = ""
             try:
@@ -788,7 +799,7 @@ class DuokeBot:
                 should, reply = result
             except Exception as e:
                 print(f"[DEBUG] erro no hook/classificador: {e}")
-                continue
+                should, reply = True, RESP_FALLBACK_CURTO
 
             print(f"[DEBUG] decide: should={should} | Resposta: {reply}")
             if not should:
@@ -808,6 +819,7 @@ class DuokeBot:
                 )
 
             await self.send_reply(page, reply)
+            self.last_replied_at[conv_key] = now
             await page.wait_for_timeout(int(getattr(settings, "delay_between_actions", 1.0) * 1000))
 
     async def run_once(self, decide_reply_fn):

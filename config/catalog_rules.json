@@ -1,0 +1,10 @@
+[
+  {
+    "match": ["Painel Redondo", "Kit Festa Jogo de Cilindro", "Cilindros MDF"],
+    "pecas_padrao": 2,
+    "pecas_grandes": 3,
+    "limite_peca_unica_cm": 80,
+    "suporta_letras_douradas": true,
+    "producao_dias_uteis": 2
+  }
+]

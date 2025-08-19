@@ -22,6 +22,7 @@ from src.duoke import DuokeBot
 from src.config import settings
 from src.classifier import decide_reply
 from src.rules import load_rules, save_rules
+from playwright.async_api import TimeoutError as PWTimeoutError
 
 # ===== Estado global simples =====
 RUNNING: bool = False
@@ -590,8 +591,10 @@ async def _mirror_loop():
         try:
             page = getattr(_bot, "current_page", None)
             if page:
-                buf = await page.screenshot(full_page=False, type="png")
+                buf = await page.screenshot(full_page=False, type="png", timeout=15000)
                 ws_broadcast({"screen": base64.b64encode(buf).decode("ascii")})
+        except PWTimeoutError:
+            pass
         except Exception as e:
             log(f"[MIRROR] erro screenshot: {type(e).__name__}: {e!r}")
         # Throttle para reduzir uso de CPU/Rede
@@ -605,10 +608,10 @@ async def _run_cycle(run_once: bool):
     _bot = DuokeBot()
 
     # Hook para UI ver o que foi lido e a resposta sugerida
-    async def hook(messages: list[str], order_info=None) -> tuple[bool, str]:
-        ws_broadcast({"snapshot": {"reading": [["buyer", m] for m in messages], "proposed": "", "running": True}})
-        should, reply = decide_reply(messages, order_info)
-        ws_broadcast({"snapshot": {"reading": [["buyer", m] for m in messages], "proposed": reply, "running": True}})
+    async def hook(pairs, buyer_only, order_info=None) -> tuple[bool, str]:
+        ws_broadcast({"snapshot": {"reading": [list(p) for p in pairs], "proposed": "", "running": True}})
+        should, reply = decide_reply(pairs, buyer_only, order_info)
+        ws_broadcast({"snapshot": {"reading": [list(p) for p in pairs], "proposed": reply, "running": True}})
         return should, reply
 
     mirror_task = asyncio.create_task(_mirror_loop())

@@ -60,3 +60,21 @@ def _fallback_classify(messages: list[str]) -> dict:
     if has("prazo","quando chega","não chegou","rastreamento","código"):
         return {"intent":"envio","reason":"dúvida logística","needs_reply":True}
     return {"intent":"envio","reason":"fallback neutro","needs_reply":True}
+
+def refine_reply(reply: str, buyer_text: str = "") -> str:
+    """Refine a reply using Gemini if API key is available."""
+    if not settings.gemini_api_key:
+        return reply
+    try:
+        model = get_gemini()
+        prompt = (
+            "Você é um assistente de atendimento ao cliente. "
+            "Melhore a resposta abaixo mantendo-a curta e educada.\n\n"
+            f"Pergunta do cliente: {buyer_text}\nResposta: {reply}"
+        )
+        resp = model.generate_content(prompt)
+        text = (resp.text or "").strip()
+        return text or reply
+    except Exception:
+        return reply
+

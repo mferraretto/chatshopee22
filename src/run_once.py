@@ -13,11 +13,11 @@ async def main():
     bot = DuokeBot()
 
     # Função síncrona (NÃO async) para evitar "coroutine was never awaited"
-    def debug_reply(messages: list[str]) -> tuple[bool, str]:
+    def debug_reply(pairs, buyer_only, order_info=None) -> tuple[bool, str]:
         print("[DEBUG] Mensagens recebidas para classificação:")
-        for msg in messages:
-            print("-", msg)
-        should, reply = decide_reply(messages)
+        for role, msg in pairs:
+            print(f"- {role}: {msg}")
+        should, reply = decide_reply(pairs, buyer_only, order_info)
         print(f"[DEBUG] Deve responder? {should} | Resposta: {reply}")
         return should, reply
 

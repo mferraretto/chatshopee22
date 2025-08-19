@@ -1,167 +1,128 @@
-# src/classifier.py
-from typing import Tuple, List
-from .templates import load_templates
-from .gemini_client import classify
-import unicodedata, re
+"""Classifier with regex-based intents and optional LLM refinement."""
+from __future__ import annotations
 
-TEMPLATES = load_templates()
-SENTINEL_TAG_GPT = "__TAG_GPT__"  # usado para sinalizar: etiquetar e pular no duoke.py
+import json
+import re
+import unicodedata
+from pathlib import Path
+from typing import List, Tuple
 
-# ===== Respostas prontas exigidas =====
-BREAKAGE_TEXT = (
-    "Olá! Sentimos muito pelo ocorrido. Podemos resolver de 3 formas:\n"
-    " Reembolso parcial — você fica com o produto e recebe parte do valor de volta.\n"
-    " Devolução pelo app da Shopee — com reembolso total após o retorno.\n"
-    " Envio de nova peça — sem custo pela peça, você paga apenas o frete, e não precisa devolver nada.\n"
-    "Me avisa qual opção prefere que resolvo tudo por aqui!"
+from .gemini_client import refine_reply
+
+CATALOG_PATH = Path(__file__).resolve().parents[1] / "config" / "catalog_rules.json"
+
+try:
+    CATALOG = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+except Exception:
+    CATALOG = []
+
+# -------------------- regex intents --------------------
+ASK_HUMAN = re.compile(r"\b(rob[oô]|humano|pessoa|atendente|quero falar|rob[oô] n[aã]o)\b", re.I)
+MISSING = re.compile(r"\b(parafus|ferragem|peç[ao]s?\s*falt|n[aã]o\s+veio|faltando|sem\s+parafuso)\b", re.I)
+ASSEMBLY = re.compile(r"\b(montar|montagem|manual|instala[cç][aã]o|passo\s*a\s*passo)\b", re.I)
+DEADLINE = re.compile(r"\b(chega|entrega|consigue?m? enviar|d[aí]a\s+\d{1,2}|at[eé]\s+dia)\b", re.I)
+PRESALE_ONE = re.compile(r"\b(pe[çc]a\s*[úu]nica|vem\s+em\s+uma\s+pe[çc]a|emendas?|em partes?)\b", re.I)
+CUSTOM_GOLD = re.compile(r"\b(dourad[ao]|pintad[ao]\s+de\s+dourado|letras\s+douradas?)\b", re.I)
+STATUS_RE = re.compile(
+    r"(rastre|entrega|cheg|postado|andamento|onde est[aá]|tracking|c[oó]digo|prazo de envio)",
+    re.I,
 )
 
-MISSING_TEXT = (
-    "Oii, tudo bem? Peço desculpas por isso, posso estar te enviando a peça que faltou, "
-    "ou se preferir posso fazer seu reembolso, o que você prefere?"
+# -------------------- respostas --------------------
+RESP_HUMANO = (
+    "Entendi, e obrigado por avisar 🙏. Sou do atendimento **humano** e vou cuidar do seu caso agora.\n"
+    "Já estou conferindo seu pedido; me diga em uma frase o principal ponto que precisa resolver primeiro."
 )
 
-def _normalize(s: str) -> str:
-    s = s.lower().strip()
-    s = "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
-    s = re.sub(r"\s+", " ", s)
-    return s
-
-def _t(key: str, fallback_key: str = "default", fallback_text: str = "Obrigado pela mensagem! 😊"):
-    return TEMPLATES.get(key) or TEMPLATES.get(fallback_key) or fallback_text
-
-# Vocabulário
-RE_NAO = r"(?:n[oã]o|nao)"
-RE_FOTO = r"\b(foto|fotos|imagem|imagens|anexo|anexei|segue foto|enviei foto|mandei foto|em anexo)\b"
-RE_FRUSTRACAO = r"(desde ontem|repetindo a mesma coisa|dif[ií]cil|ningu[eé]m resolve|cansei|uai|v[cs] est[aã]o demorando|est[aã] demorando)"
-
-RE_QUEBRA = (
-    r"(?:\bquebrad[ao]\b|\btrincad[oa]\b|\brachad[oa]\b|\bamassad[oa]\b|\briscad[oa]\b|"
-    r"\blascad[oa]\b|\bempenad[oa]\b|\bdeformad[oa]\b|\bavariad[oa]\b|\bdanificad[oa]\b|"
-    r"\bveio\s*estragado\b|\bdefeit[oa]\b|\bnao funciona\b|\bdefeito de fabrica\b|\bcom problema\b)"
+RESP_PARAFUSOS = (
+    "Sinto muito pelo transtorno! 🙏 Vou resolver pessoalmente.\n"
+    "Envio hoje um kit de parafusos completo do seu modelo **sem custo** e já mando o manual (PDF + vídeo).\n"
+    "Se preferir, posso fazer **reembolso parcial** ou **devolução com reembolso total** — você escolhe.\n"
+    "Confirma o endereço para envio? _Pedido:_ **{ORDER_ID}**."
 )
 
-RE_FALTANDO = (
-    r"(?:\bfaltou\b|\bveio\s*faltando\b|\bnao\s*veio\b|\bpe[cç]a faltando\b|\bitem faltando\b|"
-    r"\bparafuso[s]?\s*faltando\b|\bsem\s+(?:pe[cç]a|item|parafuso[s]?|acess[óo]rio[s]?|componente[s]?)\b|"
-    r"\bkit\s+incompleto\b|\bincompleto\b|\bn[ãa]o veio tudo\b)"
+RESP_PRAZO = (
+    "Consigo verificar! Me informa o **CEP** e a **data** que você precisa (ex.: 23/08).\n"
+    "Produção: {PROD_DIAS} dias úteis • Envio: {ENVIO_DIAS_ESTIMADO} úteis para {UF}.\n"
+    "Se estiver apertado, vejo **envio expresso**."
 )
 
-RE_ENVIO = r"(rastreio|rastreamento|codigo de rastreio|c[oó]digo de rastreio|enviado|envio|postado|transportadora|chega quando|prazo de entrega|a caminho)"
+RESP_PECA_UNICA = (
+    "Este modelo vai **em {PECAS} peça(s)**. Para tamanhos maiores enviamos em {PECAS_GRANDES} partes por causa do transporte, "
+    "com junção que não aparece de frente e kit de união incluso.\n"
+    "Se quiser **peça única**, dá para produzir até {LIMITE_CM} cm (consulte frete)."
+)
 
-# Casos para pular (além de PIX)
-RE_COBRANCA_PECA_NAO_ENVIADA = r"(ainda\s+nao\s*(?:foi|foram)\s*enviad[oa]s?\s*(?:a|as)\s*pe[cç]a[s]?|ainda\s+nao\s*enviaram\s*(?:a|as)\s*pe[cç]a[s]?)"
+RESP_DOURADO = (
+    "Fazemos sim letras douradas ✨. Pode ser **pintura** ou **vinil dourado**.\n"
+    "Envie o **nome/frase** e fonte preferida; mando a simulação e o valor do adicional."
+)
 
-def decide_reply(messages: List[str], order_info: dict | None = None) -> Tuple[bool, str]:
-    if not messages:
-        return (False, "")
+RESP_STATUS = "O status atual do pedido é **{status}**. Assim que houver novidades, aviso por aqui."
 
-    order_info = order_info or {}
-    status = (order_info.get("status") or "").lower()
+RESP_FALLBACK_CURTO = "Desculpa, não entendi. Pode explicar em uma frase?"
 
-    last = _normalize(messages[-1])
-    full = _normalize(" ".join(messages))
+# -------------------- helpers --------------------
 
-    # ignorar interjeições muito vagas
-    if last in {"?", "??", "???", "????"}:
-        return (False, "")
+def _normalize(text: str) -> str:
+    text = text.lower().strip()
+    text = "".join(
+        c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn"
+    )
+    return re.sub(r"\s+", " ", text)
 
-    # ignorar reclamações “PIX/reembolso não caiu”
-    if re.search(rf"\b(pix|reembolso)\b.*?\b{RE_NAO}\b.*?\b(caiu|recebi|entrou)\b", full):
-        return (False, "")
 
-    # ignorar cobranças de "ainda não enviaram a peça que faltou"
-    if re.search(RE_COBRANCA_PECA_NAO_ENVIADA, full):
-        return (False, "")
+def match_catalog(order_info: dict | None, catalog: list[dict] | None = None) -> dict:
+    catalog = catalog or CATALOG
+    title = _normalize((order_info or {}).get("title", ""))
+    for item in catalog:
+        for m in item.get("match", []):
+            if _normalize(m) in title:
+                return item
+    return {}
 
-    # ======== VALORES / POLÍTICA ========
-    # a) valor do reembolso parcial (responde 30%)
-    if re.search(r"(qual|quanto).{0,20}valor.{0,20}reembolso\s*parcial", full) or \
-       re.search(r"\breembolso\s*parcial\b.*\b(valor|quanto)\b", full):
-        return (True, _t("valor_reembolso_parcial", fallback_key="reembolso_parcial"))
 
-    # b) valor de FRETE para reenvio de nova peça -> etiquetar GPT e pular
-    if re.search(r"(qual|quanto).{0,20}valor.{0,20}frete", full) and \
-       re.search(r"(nova|outra)\s*pe[cç]a|reenvio|reposi[cç]a?o|enviar outra", full):
-        return (False, SENTINEL_TAG_GPT)
-
-    # ======== marcado como recebido, mas não recebi =========
-    if re.search(r"(marcou|marcaram|consta|apareceu|colocou|lan[cç]ou).*(recebid[oa]|entregue)", full) and \
-       re.search(rf"\b{RE_NAO}\b.*\b(receb[iu]|chegou)\b", full):
-        reply = _t("nao_recebido_marcado_recebido", fallback_key="default")
-        if re.search(RE_FRUSTRACAO, full):
-            reply = "Entendo a frustração com essa situação. 🙏 " + reply
-        return (True, reply)
-
-    # ======== urgência para cilindro grande =========
-    if re.search(r"\bcilindro\s+grande\b", full) and \
-       re.search(r"\burgenc|festa|hoje|amanh[aã]|chegando|preciso que envie|preciso enviar\b", full):
-        reply = _t("urgencia_cilindro_grande", fallback_key="envio")
-        if re.search(RE_FRUSTRACAO, full):
-            reply = "Entendo a urgência e a frustração. 🙏 " + reply
-        return (True, reply)
-
-    # ======== reembolso parcial (esperando/querendo) =========
-    if re.search(r"\bestou (?:aguardando|esperando).{0,20}reembolso\s*parcial\b", full) or \
-       re.search(r"\breembolso\s*parcial\b", last):
-        return (True, _t("reembolso_parcial", fallback_key="confirm_reembolso_parcial"))
-
-    # ======== confirmações 3 opções explícitas no texto =========
-    if re.search(r"\breembolso\s*parcial\b|\bparcial\b", last):
-        return (True, _t("confirm_reembolso_parcial"))
-    if re.search(r"\bdevolu[cç]a?o\b|\breembolso\s*total\b", last):
-        return (True, _t("confirm_devolucao_total"))
-    if re.search(r"\b(nova|outra)\s*pe[cç]a\b|\breenvio\b|\breposi[cç]a?o\b|\benviar\s*outra\b", last):
-        return (True, _t("confirm_envio_nova_peca"))
-
-    # ======== faltando peça (resposta pronta) =========
-    if re.search(RE_FALTANDO, full):
-        return (True, MISSING_TEXT)
-
-    # ======== quebra / defeito (resposta pronta) =========
-    if re.search(RE_QUEBRA, full):
-        has_desire = re.search(r"\b(tomara|espero)\b", full)
-        has_negation = re.search(rf"\b(?:sem|{RE_NAO})\b.*{RE_QUEBRA}", full)
-        has_post_delivery = re.search(r"\b(chegou|veio|recebi|esta)\b", full)
-        pre_entrega = status in {"ready to ship", "to ship", "shipped"}
-
-        if has_desire or has_negation or (pre_entrega and not has_post_delivery):
-            return (True, _t("pre_envio_tranquilizacao", fallback_key="envio"))
-
-        # Se mencionar foto, você pode optar por outra template se quiser:
-        # if re.search(RE_FOTO, full): return (True, _t("quebrado_com_foto", fallback_key="quebra_3_opcoes"))
-        return (True, BREAKAGE_TEXT)
-
-    # ======== Fallback via Gemini =========
-    info = classify(messages) or {}
-    intent = (info.get("intent") or "").strip().lower()
-
-    # Não aceite "envio" do modelo se o texto não fala de envio
-    if intent == "envio" and not re.search(RE_ENVIO, full):
-        intent = "default"
-
-    intent_map = {
-        "tempo_envio": "tempo_envio",
-        "quebrado_com_foto": "quebrado_com_foto",
-        "quebrado_sem_foto": "quebrado_sem_foto",
-        "quebra": "quebra_3_opcoes",
-        "faltando": "faltando_peca",
-        "faltando_peca": "faltando_peca",
-        "reembolso_parcial": "reembolso_parcial",
-        "devolucao_total": "devolucao_total",
-        "pedido_cancelado": "pedido_cancelado",
-        "pedido_parado": "pedido_parado",
-        "cilindro_pequeno": "cilindro_pequeno",
-        "elogio": "elogio",
-        "envio": "envio",
-        "agradecimento": "agradecimento_generico",
-        "nao_recebido_marcado_recebido": "nao_recebido_marcado_recebido",
-        "urgencia_cilindro_grande": "urgencia_cilindro_grande",
-        "default": "default",
-        "pular": None,
+def prod_defaults(prod: dict | None) -> dict:
+    prod = prod or {}
+    return {
+        "PECAS": prod.get("pecas_padrao", "?"),
+        "PECAS_GRANDES": prod.get("pecas_grandes", "?"),
+        "LIMITE_CM": prod.get("limite_peca_unica_cm", "?"),
+        "PROD_DIAS": prod.get("producao_dias_uteis", "?"),
+        "ENVIO_DIAS_ESTIMADO": prod.get("envio_dias_est", "?"),
+        "UF": prod.get("uf", "sua região"),
     }
 
-    key = intent_map.get(intent, intent)
-    if key is None:
-        return (False, "")
-    return (True, _t(key, fallback_key="envio"))
+# -------------------- main --------------------
+
+def decide_reply(
+    pairs: List[Tuple[str, str]],
+    buyer_only: List[str],
+    order_info: dict | None = None,
+) -> Tuple[bool, str]:
+    """Decide reply based on regex intents with fallback and optional LLM refinement."""
+    order_info = order_info or {}
+    text = " | ".join(t for r, t in pairs[-3:] if r == "buyer") if pairs else " | ".join(buyer_only[-3:])
+    norm_text = _normalize(text)
+    order_id = order_info.get("orderId", "")
+
+    reply = RESP_FALLBACK_CURTO
+
+    if ASK_HUMAN.search(norm_text):
+        reply = RESP_HUMANO
+    elif MISSING.search(norm_text) or ASSEMBLY.search(norm_text):
+        reply = RESP_PARAFUSOS.format(order_id=order_id or "{ORDER_ID}")
+    elif DEADLINE.search(norm_text):
+        prod = match_catalog(order_info)
+        reply = RESP_PRAZO.format(**prod_defaults(prod))
+    elif PRESALE_ONE.search(norm_text):
+        prod = match_catalog(order_info)
+        reply = RESP_PECA_UNICA.format(**prod_defaults(prod))
+    elif CUSTOM_GOLD.search(norm_text):
+        reply = RESP_DOURADO
+    elif STATUS_RE.search(norm_text) and order_info.get("status"):
+        reply = RESP_STATUS.format(status=order_info["status"])
+
+    refined = refine_reply(reply, norm_text)
+    return True, refined
+
