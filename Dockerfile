@@ -25,8 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copia o resto do código
 COPY . /app
 
-# Porta do Render
-ENV PORT=10000
+# Porta padrão para Cloud Run
+ENV PORT=8080
 
-# Comando de start (Uvicorn com a sua app)
-CMD ["uvicorn", "app_ui:app", "--host", "0.0.0.0", "--port", "10000"]
+# Comando de start (usa variável $PORT do Cloud Run)
+CMD ["sh", "-c", "uvicorn app_ui:app --host 0.0.0.0 --port ${PORT:-8080}"]
