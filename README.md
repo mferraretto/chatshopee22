@@ -136,4 +136,28 @@ Edite `config/selectors.json` caso a sua UI seja diferente.
 - Instale fontes básicas no container (ex.: `fonts-liberation`, `fonts-noto`) ou aborte requisições de fonte.
 - Ajuste a frequência de health checks (30–60&nbsp;s) e, se possível, execute o espelho em processo separado do robô.
 
+## Deploy no Google Cloud Run (São Paulo)
+
+Exemplo usando `gcloud`:
+
+```bash
+# Console web
+gcloud builds submit --tag gcr.io/PROJECT-ID/duoke-console
+gcloud run deploy duoke-console \
+  --image gcr.io/PROJECT-ID/duoke-console \
+  --region southamerica-east1 \
+  --allow-unauthenticated
+
+# Worker (Cloud Run Job)
+gcloud builds submit --tag gcr.io/PROJECT-ID/duoke-bot
+gcloud run jobs create duoke-bot \
+  --image gcr.io/PROJECT-ID/duoke-bot \
+  --region southamerica-east1
+
+# Executar manualmente o job
+gcloud run jobs execute duoke-bot --region southamerica-east1
+```
+
+O arquivo `cloudrun.yaml` traz um modelo de configuração para esses recursos.
+
 Bom uso!

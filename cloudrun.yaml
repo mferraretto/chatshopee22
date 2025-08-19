@@ -1,0 +1,31 @@
+# Cloud Run service for the web console
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: duoke-console
+spec:
+  template:
+    spec:
+      containers:
+        - image: gcr.io/PROJECT-ID/duoke-console
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          command: ["sh", "-c", "uvicorn app_ui:app --host 0.0.0.0 --port $PORT"]
+---
+# Cloud Run job for the background worker
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: duoke-bot
+spec:
+  template:
+    template:
+      spec:
+        containers:
+          - image: gcr.io/PROJECT-ID/duoke-bot
+            command: ["python", "-m", "src.run_loop"]
+            env:
+              - name: PYTHONUNBUFFERED
+                value: "1"
+        restartPolicy: Never
