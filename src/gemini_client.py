@@ -4,6 +4,9 @@ import unicodedata
 import google.generativeai as genai
 from .config import settings
 
+# ---------------------------
+# Gemini client
+# ---------------------------
 def get_gemini():
     if not settings.gemini_api_key:
         raise RuntimeError("GEMINI_API_KEY ausente. Configure no .env")
@@ -13,10 +16,13 @@ def get_gemini():
         generation_config={
             "temperature": 0.2,
             "top_p": 0.9,
-            "response_mime_type": "application/json"  # força JSON
+            "response_mime_type": "application/json"  # usamos JSON nas duas passadas
         }
     )
 
+# ---------------------------
+# Prompt de classificação (igual ao seu, só mantido aqui)
+# ---------------------------
 PROMPT = r"""
 Você é um classificador de mensagens de atendimento Shopee e decide se devemos responder.
 Leia as últimas mensagens (comprador + vendedor). Classifique a INTENÇÃO e diga se devemos responder.
@@ -54,33 +60,42 @@ SAÍDA OBRIGATÓRIA (JSON apenas):
 }
 """
 
-# --- util: remove acentos para facilitar matching do fallback
+# ---------------------------
+# Utils de parsing/matching
+# ---------------------------
+def _strip_code_fences(s: str) -> str:
+    if not s:
+        return s
+    s = s.strip()
+    if s.startswith("```"):
+        s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s, flags=re.IGNORECASE | re.DOTALL).strip()
+    return s
+
+def _first_json_object(s: str) -> str | None:
+    if not s:
+        return None
+    m = re.search(r"\{.*?\}", s, flags=re.DOTALL)
+    return m.group(0) if m else None
+
 def _norm(s: str) -> str:
     s = unicodedata.normalize("NFD", s)
     s = s.encode("ascii", "ignore").decode("ascii")
     return s.lower()
 
+# ---------------------------
+# Classificação (inalterada)
+# ---------------------------
 def classify(messages: list[str]) -> dict:
     model = get_gemini()
     history = "\n".join(messages[-8:])
     try:
         resp = model.generate_content(f"{PROMPT}\n\nHISTORICO:\n{history}")
-        txt = (getattr(resp, "text", None) or "").strip()
-
-        # limpa cercas de código
-        if txt.startswith("```"):
-            txt = re.sub(r"^```(?:json)?\s*|\s*```$", "", txt, flags=re.IGNORECASE | re.DOTALL).strip()
-
-        # pega o primeiro bloco JSON { ... }
-        m = re.search(r"\{.*\}", txt, flags=re.DOTALL)
-        if m:
-            txt = m.group(0)
-
-        data = json.loads(txt)
+        txt = _strip_code_fences((getattr(resp, "text", None) or "").strip())
+        blob = _first_json_object(txt) or txt
+        data = json.loads(blob)
         if not isinstance(data, dict):
             raise ValueError("JSON não é um objeto")
         return data
-
     except Exception:
         return _fallback_classify(messages)
 
@@ -91,13 +106,11 @@ def _fallback_classify(messages: list[str]) -> dict:
     def has(*keys):
         return any(k in t for k in keys)
 
-    # pular: PIX ou cobrança de item prometido
-    if has("pix", "comprovante", "nao recebi o pix",
-           "pix nao caiu", "reembolso nao caiu"):
+    # pular
+    if has("pix", "comprovante", "nao recebi o pix", "pix nao caiu", "reembolso nao caiu"):
         return {"intent": "pular", "reason": "pix/reembolso pendente", "needs_reply": False,
                 "signals": {"tem_foto": False, "urgencia": False, "pre_venda": False}}
-    if has("cade a peca", "prometeram enviar", "prometeram a peca",
-           "ficaram de enviar", "nao enviaram ainda"):
+    if has("cade a peca", "prometeram enviar", "prometeram a peca", "ficaram de enviar", "nao enviaram ainda"):
         return {"intent": "pular", "reason": "cobranca de peca prometida", "needs_reply": False,
                 "signals": {"tem_foto": False, "urgencia": False, "pre_venda": False}}
 
@@ -132,22 +145,98 @@ def _fallback_classify(messages: list[str]) -> dict:
     return {"intent": "envio", "reason": "fallback neutro", "needs_reply": True,
             "signals": {"tem_foto": False, "urgencia": False, "pre_venda": not has("veio", "chegou", "recebi")}}
 
+# ============================================================
+# Manager + Critic (duas passadas baratas) para refinar resposta
+# ============================================================
+
+_MANAGER_PROMPT = r"""
+Você é o MANAGER de atendimento. Objetivo: gerar um rascunho curto e educado da resposta.
+
+REGRAS:
+- Não prometa data exata de entrega.
+- Não mencione/peça PIX/reembolso se o cliente falou disso.
+- Não altere políticas nem opções (apenas reescreva).
+- Mantenha 1–2 frases, claras e amistosas.
+- Se faltar informação essencial, peça **uma** coisa por vez.
+
+ENTRADA:
+- Mensagem do cliente: {{BUYER}}
+- Resposta sugerida (não precisa copiar literalmente): {{DRAFT}}
+
+SAÍDA OBRIGATÓRIA EM JSON:
+{
+  "draft": "<texto curto e educado>",
+  "signals": {
+    "asked_clarification": true/false
+  }
+}
+"""
+
+_CRITIC_PROMPT = r"""
+Você é o CRITIC. Revise o texto final com este checklist:
+
+CHECKLIST:
+- Curto (máx. ~2 frases).
+- Tom cordial e claro, sem jargão.
+- Não prometa data de entrega.
+- Não fale de PIX/reembolso.
+- Não mude condições/opções originais.
+- Se o MANAGER pediu 1 esclarecimento, mantenha um pedido simples.
+
+ENTRADA:
+- Mensagem do cliente: {{BUYER}}
+- Texto do MANAGER: {{MANAGER_DRAFT}}
+
+SAÍDA OBRIGATÓRIA EM JSON:
+{ "final": "<texto pronto para enviar>" }
+"""
+
+def _gen_json(model, prompt: str) -> dict:
+    """Chama o modelo, limpa cercas e retorna dict JSON (ou lança)."""
+    resp = model.generate_content(prompt)
+    raw = _strip_code_fences((getattr(resp, "text", None) or "").strip())
+    blob = _first_json_object(raw) or raw
+    return json.loads(blob)
+
 def refine_reply(reply: str, buyer_text: str = "") -> str:
+    """
+    Pipeline manager -> critic:
+      1) Manager cria rascunho curto e educado.
+      2) Critic aplica checklist e retorna o texto final.
+    """
     if not settings.gemini_api_key:
         return reply
     try:
         model = get_gemini()
-        prompt = (
-            "Você é um assistente de atendimento. Reescreva a resposta mantendo-a curta, clara e educada, "
-            "sem prometer data exata de entrega, sem falar sobre PIX/reembolso quando o cliente falar disso, "
-            "e sem alterar as opções/condições apresentadas. Preserve o sentido.\n\n"
-            f"Mensagem do cliente: {buyer_text}\nResposta sugerida: {reply}\n\n"
-            "Retorne somente o texto reescrito (sem JSON)."
+
+        # 1) Manager
+        mgr_prompt = (
+            _MANAGER_PROMPT
+            .replace("{{BUYER}}", buyer_text or "")
+            .replace("{{DRAFT}}", reply or "")
         )
-        resp = model.generate_content(prompt)
-        text = (getattr(resp, "text", None) or "").strip()
-        return text or reply
+        try:
+            mgr_data = _gen_json(model, mgr_prompt)
+            manager_draft = (mgr_data.get("draft") or "").strip()
+        except Exception:
+            manager_draft = reply  # fallback: usa resposta original
+
+        if not manager_draft:
+            manager_draft = reply
+
+        # 2) Critic
+        critic_prompt = (
+            _CRITIC_PROMPT
+            .replace("{{BUYER}}", buyer_text or "")
+            .replace("{{MANAGER_DRAFT}}", manager_draft)
+        )
+        try:
+            crt_data = _gen_json(model, critic_prompt)
+            final_txt = (crt_data.get("final") or "").strip()
+            return final_txt or manager_draft or reply
+        except Exception:
+            return manager_draft or reply
+
     except Exception:
         return reply
-
 
