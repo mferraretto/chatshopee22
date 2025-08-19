@@ -777,8 +777,10 @@ class DuokeBot:
             reply = ""
             try:
                 params = inspect.signature(decide_reply_fn).parameters
-                if len(params) >= 2:
-                    result = decide_reply_fn(pairs, buyer_only)
+                if len(params) >= 3:
+                    result = decide_reply_fn(pairs, buyer_only, order_info)
+                elif len(params) >= 2:
+                    result = decide_reply_fn(buyer_only, order_info)
                 else:
                     result = decide_reply_fn(buyer_only)
                 if inspect.isawaitable(result):
