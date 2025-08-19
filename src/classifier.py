@@ -52,9 +52,12 @@ RE_ENVIO = r"(rastreio|rastreamento|codigo de rastreio|c[oó]digo de rastreio|en
 # Casos para pular (além de PIX)
 RE_COBRANCA_PECA_NAO_ENVIADA = r"(ainda\s+nao\s*(?:foi|foram)\s*enviad[oa]s?\s*(?:a|as)\s*pe[cç]a[s]?|ainda\s+nao\s*enviaram\s*(?:a|as)\s*pe[cç]a[s]?)"
 
-def decide_reply(messages: List[str]) -> Tuple[bool, str]:
+def decide_reply(messages: List[str], order_info: dict | None = None) -> Tuple[bool, str]:
     if not messages:
         return (False, "")
+
+    order_info = order_info or {}
+    status = (order_info.get("status") or "").lower()
 
     last = _normalize(messages[-1])
     full = _normalize(" ".join(messages))
@@ -117,6 +120,14 @@ def decide_reply(messages: List[str]) -> Tuple[bool, str]:
 
     # ======== quebra / defeito (resposta pronta) =========
     if re.search(RE_QUEBRA, full):
+        has_desire = re.search(r"\b(tomara|espero)\b", full)
+        has_negation = re.search(rf"\b(?:sem|{RE_NAO})\b.*{RE_QUEBRA}", full)
+        has_post_delivery = re.search(r"\b(chegou|veio|recebi|esta)\b", full)
+        pre_entrega = status in {"ready to ship", "to ship", "shipped"}
+
+        if has_desire or has_negation or (pre_entrega and not has_post_delivery):
+            return (True, _t("pre_envio_tranquilizacao", fallback_key="envio"))
+
         # Se mencionar foto, você pode optar por outra template se quiser:
         # if re.search(RE_FOTO, full): return (True, _t("quebrado_com_foto", fallback_key="quebra_3_opcoes"))
         return (True, BREAKAGE_TEXT)

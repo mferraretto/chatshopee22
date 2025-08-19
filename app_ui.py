@@ -605,9 +605,9 @@ async def _run_cycle(run_once: bool):
     _bot = DuokeBot()
 
     # Hook para UI ver o que foi lido e a resposta sugerida
-    async def hook(messages: list[str]) -> tuple[bool, str]:
+    async def hook(messages: list[str], order_info=None) -> tuple[bool, str]:
         ws_broadcast({"snapshot": {"reading": [["buyer", m] for m in messages], "proposed": "", "running": True}})
-        should, reply = decide_reply(messages)
+        should, reply = decide_reply(messages, order_info)
         ws_broadcast({"snapshot": {"reading": [["buyer", m] for m in messages], "proposed": reply, "running": True}})
         return should, reply
 
