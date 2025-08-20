@@ -641,7 +641,8 @@ class DuokeBot:
             pass
 
     async def apply_label(self, page, label_name: str = "gpt") -> bool:
-        """Abre o modal de etiquetas, clica na etiqueta `label_name` e confirma."""
+        """Abre o modal de etiquetas, seleciona a etiqueta `label_name` e confirma."""
+        timeout = settings.goto_timeout_ms
         try:
             # 1) Botão correto no cabeçalho do painel direito
             btn_sel = SEL.get(
@@ -651,33 +652,50 @@ class DuokeBot:
 
             btn = page.locator(btn_sel).locator(":visible").first
             await btn.scroll_into_view_if_needed()
-            await btn.wait_for(state="visible", timeout=5000)
+            await btn.wait_for(state="visible", timeout=timeout)
             await btn.click()
 
             # 2) Modal de etiquetas
             modal_sel = SEL.get("tag_modal", ".el-dialog.select_label_dialog, .el-dialog__wrapper:has(.label_item)")
             modal = page.locator(modal_sel).first
-            await modal.wait_for(state="visible", timeout=5000)
+            await modal.wait_for(state="visible", timeout=timeout)
 
-            # 3) Selecionar etiqueta pelo texto
-            # seleciona o elemento .label_item que contém o texto da etiqueta
-            target = modal.locator(
-                f".label_item:has(.label_item_name:has-text('{label_name}'))"
+            # 3) Clicar na etiqueta pelo texto
+            item_sel = SEL.get("tag_item", "span.label_item_name")
+            tag_span = modal.locator(item_sel, has_text=label_name).first
+            await tag_span.scroll_into_view_if_needed()
+            await tag_span.click()
+
+            # 4) Validar que o card ficou ativo
+            tag_card = tag_span.locator("xpath=ancestor::div[contains(@class,'label_item')]").first
+            try:
+                await tag_card.wait_for(state="attached", timeout=timeout)
+                await page.wait_for_function(
+                    """(el) => el.classList.contains('active')""",
+                    arg=await tag_card.element_handle(),
+                    timeout=timeout,
+                )
+            except PWTimeoutError:
+                await tag_span.click()
+                await page.wait_for_function(
+                    """(el) => el.classList.contains('active')""",
+                    arg=await tag_card.element_handle(),
+                    timeout=timeout,
+                )
+
+            # 5) Confirmar e aguardar fechar
+            confirm_btn = modal.locator(
+                "button.el-button.el-button--primary",
+                has_text="Confirm",
             ).first
+            if await confirm_btn.count() == 0:
+                confirm_btn = modal.locator(
+                    "div.el-dialog__footer button.el-button.el-button--primary"
+                ).first
 
-            await target.scroll_into_view_if_needed()
-            await target.click()
-
-            # aguarda a etiqueta ficar ativa antes de confirmar
-            await modal.locator(
-                f".label_item.active:has(.label_item_name:has-text('{label_name}'))"
-            ).wait_for(state="visible", timeout=3000)
-
-            # 4) Confirmar e aguardar fechar
-            confirm_sel = SEL.get("tag_confirm", ".el-dialog__footer .el-button--primary")
-            confirm = modal.locator(confirm_sel).first
-            await confirm.click()
-            await modal.wait_for(state="hidden", timeout=4000)
+            await confirm_btn.scroll_into_view_if_needed()
+            await confirm_btn.click()
+            await modal.wait_for(state="hidden", timeout=timeout)
 
             return True
         except Exception as e:
