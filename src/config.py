@@ -21,11 +21,11 @@ class Settings(BaseModel):
     # --- App / Robô ---
     douke_url: str = Field(default_factory=lambda: os.getenv("DOUKE_URL", "https://web.duoke.com/?lang=en#/dk/main/chat"))
     max_conversations: int = Field(default_factory=lambda: int(os.getenv("MAX_CONVERSATIONS", "50")))
-    history_depth: int = Field(default_factory=lambda: int(os.getenv("HISTORY_DEPTH", "10")))
+    history_depth: int = Field(default_factory=lambda: int(os.getenv("HISTORY_DEPTH", "20")))
     apply_needs_reply_filter: bool = Field(
         default_factory=lambda: os.getenv("APPLY_NEEDS_REPLY_FILTER", "nao").lower() in TRUE_SET
     )
-    loop_interval: int = Field(default_factory=lambda: int(os.getenv("LOOP_INTERVAL", "30")))
+    loop_interval: int = Field(default_factory=lambda: int(os.getenv("LOOP_INTERVAL", "10")))
     delay_after_nav: float = Field(default_factory=lambda: float(os.getenv("DELAY_AFTER_NAV", "1")))
     delay_between_actions: float = Field(default_factory=lambda: float(os.getenv("DELAY_BETWEEN_ACTIONS", "0.1")))
     goto_timeout_ms: int = Field(default_factory=lambda: int(os.getenv("GOTO_TIMEOUT_MS", "60000")))
