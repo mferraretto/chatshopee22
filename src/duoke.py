@@ -728,7 +728,75 @@ class DuokeBot:
         m = re.search(r"\b([A-Z]{2}\d{8,}[A-Z0-9]{1,})\b", content or "")
         return m.group(1) if m else None
 
-    # ---------- modos de execução ----------
+# ---------- modos de execução / helpers ----------
+
+    @staticmethod
+    async def _text_or_empty(locator):
+        if await locator.count():
+            t = await locator.first().inner_text()
+            return (t or "").strip()
+        return ""
+
+    @staticmethod
+    async def get_order_bits(page):
+        """Lê status/desc/track + produto/variação/SKU do painel direito usando SEL."""
+        status_tag = await DuokeBot._text_or_empty(page.locator(SEL["order_status_tag"]))
+
+        log_status_el = page.locator(SEL["logistics_status"])
+        logistics_status = ""
+        if await log_status_el.count():
+            logistics_status = (await log_status_el.first().get_attribute("title")) or (await log_status_el.first().inner_text())
+            logistics_status = (logistics_status or "").strip()
+
+        latest_desc = await DuokeBot._text_or_empty(page.locator(SEL["latest_logistics_description"]))
+        tracking = await DuokeBot._text_or_empty(page.locator(SEL["tracking_number"]))
+        product = await DuokeBot._text_or_empty(page.locator(SEL["product_title"]))
+        variation = await DuokeBot._text_or_empty(page.locator(SEL["product_variation"]))
+        sku = await DuokeBot._text_or_empty(page.locator(SEL["product_sku"]))
+
+        status_consolidado = (status_tag or logistics_status or latest_desc or "desconhecido")
+
+        return {
+            "status_tag": status_tag,
+            "logistics_status": logistics_status,
+            "latest_desc": latest_desc,
+            "tracking": tracking,
+            "product": product,
+            "variation": variation,
+            "sku": sku,
+            "status_consolidado": status_consolidado,
+        }
+
+    @staticmethod
+    async def get_review_text(page):
+        stars = page.locator(SEL["review_stars"])
+        if not await stars.count():
+            return ""
+        try:
+            await stars.first().hover()
+            popup = page.locator(SEL["review_text"])
+            await popup.first().wait_for(state="visible", timeout=2000)
+            return (await popup.first().inner_text() or "").strip()
+        except Exception:
+            try:
+                await stars.first().click()
+                popup = page.locator(SEL["review_text"])
+                await popup.first().wait_for(state="visible", timeout=2000)
+                return (await popup.first().inner_text() or "").strip()
+            except Exception:
+                return ""
+
+    @staticmethod
+    def build_history_from_pairs(pairs, max_buyer=8, max_seller_tail=2):
+        """
+        pairs: lista [(role, text)] em ordem cronológica.
+        Retorna bloco de texto com últimas msgs do comprador + 1-2 do vendedor p/ contexto.
+        """
+        buyers = [t for r, t in pairs if r == "buyer"][-max_buyer:]
+        sellers_tail = [t for r, t in pairs if r == "seller"][-max_seller_tail:]
+        want = set(buyers + sellers_tail)
+        merged = [t.strip() for _, t in pairs if t in want]
+        return "\n\n".join(merged)
 
     async def _cycle(self, page, decide_reply_fn):
         """Executa um ciclo sobre as conversas visíveis."""
@@ -762,21 +830,54 @@ class DuokeBot:
 
             await self.pause_event.wait()
 
+            # ----- Order info + status consolidado -----
             try:
                 order_info = await self.read_sidebar_order_info(page)
+                fields = (order_info.get("fields") or {})
+                status_tag = (order_info.get("status") or "").strip()
+
+                # Logistics Status (ex.: Delivered)
+                logistics_status = ""
+                for k, v in fields.items():
+                    if k.lower().startswith("logistics status"):
+                        logistics_status = (v or "").strip()
+                        break
+
+                # Última descrição logística (ex.: Pedido entregue)
+                latest_desc = ""
+                for k, v in fields.items():
+                    if k.lower().startswith("latest logistics description"):
+                        latest_desc = (v or "").strip()
+                        break
+
+                # (opcional) Tracking, caso venha nos fields
+                for k, v in fields.items():
+                    if k.lower().startswith("tracking number"):
+                        order_info["tracking"] = (v or "").strip()
+                        break
+
+                order_info["status_consolidado"] = status_tag or logistics_status or latest_desc or "desconhecido"
+                order_info["logistics_latest_desc"] = latest_desc
+
                 print("[DEBUG] Order info:", order_info)
             except Exception as e:
                 order_info = {}
                 print(f"[DEBUG] falha ao ler order_info: {e}")
 
+            # ----- Mensagens + history -----
             depth = int(getattr(settings, "history_depth", 8) or 8)
             pairs = await self.read_messages_with_roles(page, depth * 2)
             print(f"[DEBUG] conversa {i}: {len(pairs)} msgs (com role)")
             if not pairs:
                 continue
-                
+
             buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
 
+            # Últimas N do comprador + 2 do vendedor para contexto
+            history_block = self.build_history_from_pairs(pairs, max_buyer=depth, max_seller_tail=2)
+            order_info["history_block"] = history_block
+
+            # ----- dedupe por conversa e rate-limit -----
             conv_key = order_info.get("orderId") or "|".join(buyer_only[-2:]) or str(i)
             now = time.time()
             last = self.last_replied_at.get(conv_key)
@@ -784,6 +885,7 @@ class DuokeBot:
                 print(f"[DEBUG] pulando conversa já respondida recentemente: {conv_key}")
                 continue
 
+            # ----- classificador / decisão -----
             should = False
             reply = ""
             try:
@@ -811,6 +913,7 @@ class DuokeBot:
             await self.send_reply(page, reply)
             self.last_replied_at[conv_key] = now
             await page.wait_for_timeout(int(getattr(settings, "delay_between_actions", 1.0) * 1000))
+
 
     async def run_once(self, decide_reply_fn):
         """Modo pontual (mantido por compat)."""
