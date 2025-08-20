@@ -819,6 +819,7 @@ class DuokeBot:
     # ---------- envio de resposta ----------
 
     async def send_reply(self, page, text: str):
+        print(f"[DEBUG] Enviando resposta: {text}")
         candidates = [
             s.strip() for s in SEL.get("input_textarea", "").split(",") if s.strip()
         ]
@@ -1225,6 +1226,10 @@ class DuokeBot:
             print(f"[DEBUG] conversa {i}: {len(pairs)} msgs (com role)")
             if not pairs:
                 continue
+
+            print("[DEBUG] Mensagens lidas:")
+            for role, msg in pairs:
+                print(f"- {role}: {msg}")
 
             buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
 
