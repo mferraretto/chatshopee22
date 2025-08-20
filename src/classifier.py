@@ -136,7 +136,7 @@ def decide_reply(
     text = " | ".join(t for r, t in pairs[-3:] if r == "buyer") if pairs else " | ".join(buyer_only[-3:])
     norm_text = _normalize(text)
     order_id = order_info.get("orderId", "")
-    messages = [t for _, t in pairs] if pairs else buyer_only
+    messages = buyer_only
     cls = classify(messages)
     if cls.get("needs_reply") is False:
         return False, ""
