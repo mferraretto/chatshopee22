@@ -22,8 +22,8 @@
   "filter_all_conversations": "text=Todos, text=All, text=All messages, text=Todas",
 
   "tag_button": ".cont_header .contact_action_icon:has(i.icon_mark_1), .contact_action .contact_action_icon:has(i.icon_mark_1)",
-  "tag_modal": ".el-dialog.select_label_dialog, .el-dialog:has(.select_label_content), .el-dialog__wrapper:has(.select_label_content)",
-  "tag_item": ".label_container .label_item .label_item_name, .label_container .label_item, span.label_item_name",
+  "tag_item": "span.label_item_name",
+  "tag_item_active": ".label_item.active",
   "tag_confirm": ".el-dialog__footer .el-button--primary, .select_label_dialog .el-button--primary",
 
   "order_status_tag": "div.order_item_status .order_item_status_tags .el-tag, div.order_item_status .el-tag",
