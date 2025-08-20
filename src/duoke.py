@@ -770,12 +770,7 @@ class DuokeBot:
                 print(f"[DEBUG] falha ao ler order_info: {e}")
 
             depth = int(getattr(settings, "history_depth", 8) or 8)
-            pairs = await self.read_messages_with_roles(page, depth * 2)
-            print(f"[DEBUG] conversa {i}: {len(pairs)} msgs (com role)")
-            if not pairs or pairs[-1][0] != "buyer":
-                print("[DEBUG] Última mensagem não é do comprador; pulando conversa.")
-                continue
-
+            
             buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
 
             conv_key = order_info.get("orderId") or "|".join(buyer_only[-2:]) or str(i)
