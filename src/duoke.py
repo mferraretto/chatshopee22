@@ -925,6 +925,30 @@ class DuokeBot:
             if not pairs:
                 continue
 
+            # Se a última mensagem do vendedor foi o texto de "quebra_com_foto"
+            # e o cliente respondeu em seguida, apenas marcamos a conversa
+            # com a etiqueta desejada e pulamos sem reprocessar.
+            if len(pairs) >= 2:
+                last_role, last_txt = pairs[-1]
+                prev_role, prev_txt = pairs[-2]
+                prev_lower = (prev_txt or "").lower()
+                if (
+                    last_role == "buyer"
+                    and prev_role == "seller"
+                    and "podemos resolver de 3 formas" in prev_lower
+                    and "reembolso parcial" in prev_lower
+                    and "devolu" in prev_lower
+                    and "envio de nova peça" in prev_lower
+                ):
+                    await self.apply_label(
+                        page,
+                        label_name=getattr(settings, "label_on_quebra_com_foto", "gpt"),
+                    )
+                    print(
+                        "[DEBUG] conversa marcada (cliente respondeu à mensagem de quebra_com_foto)"
+                    )
+                    continue
+
             buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
 
             # Últimas N do comprador + 2 do vendedor para contexto
