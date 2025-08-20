@@ -643,8 +643,15 @@ class DuokeBot:
     async def apply_label(self, page, label_name: str = "gpt") -> bool:
         """Abre o modal de etiquetas, clica na etiqueta `label_name` e confirma."""
         try:
-            btn = page.locator(SEL.get("tag_button", "i.icon_mark_1")).first
-            await btn.wait_for(state="visible", timeout=5000)
+            btn = page.locator(".cont_header").first.locator(
+                ".contact_action_icon:has(i.icon_mark_1)"
+            ).locator(":visible").first
+            if not await btn.count():
+                btn = page.locator(
+                    ".contact_action .contact_action_icon:has(i.icon_mark_1)"
+                ).locator(":visible").first
+            await btn.scroll_into_view_if_needed()
+
             await btn.click()
 
             modal = page.locator(SEL.get("tag_modal", ".el-dialog.select_label_dialog")).first
