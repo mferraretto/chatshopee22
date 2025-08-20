@@ -1,6 +1,8 @@
 import json
 import re
 import unicodedata
+from typing import List, Tuple
+
 import google.generativeai as genai
 from .config import settings
 
@@ -85,9 +87,10 @@ def _norm(s: str) -> str:
 # ---------------------------
 # Classificação (inalterada)
 # ---------------------------
-def classify(messages: list[str]) -> dict:
+def classify(pairs: List[Tuple[str, str]]) -> dict:
+    """Classifica a intenção considerando apenas mensagens do comprador."""
     model = get_gemini()
-    history = "\n".join(messages[-8:])
+    history = "\n".join([t for r, t in pairs if r == "buyer"][-8:])
     try:
         resp = model.generate_content(f"{PROMPT}\n\nHISTORICO:\n{history}")
         txt = _strip_code_fences((getattr(resp, "text", None) or "").strip())
@@ -97,10 +100,11 @@ def classify(messages: list[str]) -> dict:
             raise ValueError("JSON não é um objeto")
         return data
     except Exception:
-        return _fallback_classify(messages)
+        return _fallback_classify(pairs)
 
-def _fallback_classify(messages: list[str]) -> dict:
-    raw = " ".join(messages[-8:])
+def _fallback_classify(pairs: List[Tuple[str, str]]) -> dict:
+    buyer_history = [t for r, t in pairs if r == "buyer"]
+    raw = " ".join(buyer_history[-8:])
     t = _norm(raw)
 
     def has(*keys):
@@ -198,7 +202,7 @@ def _gen_json(model, prompt: str) -> dict:
     blob = _first_json_object(raw) or raw
     return json.loads(blob)
 
-def refine_reply(reply: str, buyer_text: str = "") -> str:
+def refine_reply(reply: str, pairs: List[Tuple[str, str]] | None = None) -> str:
     """
     Pipeline manager -> critic:
       1) Manager cria rascunho curto e educado.
@@ -209,10 +213,13 @@ def refine_reply(reply: str, buyer_text: str = "") -> str:
     try:
         model = get_gemini()
 
+        buyer_msgs = [t for r, t in (pairs or []) if r == "buyer"]
+        buyer_text = " | ".join(buyer_msgs[-3:])
+
         # 1) Manager
         mgr_prompt = (
             _MANAGER_PROMPT
-            .replace("{{BUYER}}", buyer_text or "")
+            .replace("{{BUYER}}", buyer_text)
             .replace("{{DRAFT}}", reply or "")
         )
         try:
@@ -227,7 +234,7 @@ def refine_reply(reply: str, buyer_text: str = "") -> str:
         # 2) Critic
         critic_prompt = (
             _CRITIC_PROMPT
-            .replace("{{BUYER}}", buyer_text or "")
+            .replace("{{BUYER}}", buyer_text)
             .replace("{{MANAGER_DRAFT}}", manager_draft)
         )
         try:

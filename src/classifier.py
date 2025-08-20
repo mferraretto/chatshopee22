@@ -1,4 +1,4 @@
-"""Classifier with regex-based intents and optional LLM refinement."""
+""""Classifier with regex-based intents and optional LLM refinement."""
 from __future__ import annotations
 
 import json
@@ -84,7 +84,7 @@ RESP_STATUS = "O status atual do pedido é **{status}**. Assim que houver novida
 RESP_FALLBACK_CURTO = "Desculpa, não entendi. Pode explicar em uma frase?"
 
 RESP_NOT_CHECKED = (
-    "Sem problema! Quando conseguir verificar, me avise por aqui \U0001F60A."
+    "Sem problema! Quando conseguir verificar, me avise por aqui 😊."
 )
 
 # -------------------- helpers --------------------
@@ -127,37 +127,48 @@ def decide_reply(
 ) -> Tuple[bool, str]:
     """Decide reply based on intent classification + rules with regex fallback.
 
-    1. Classifica o histórico para detectar intenção (ex.: "quebra").
-    2. Se houver regra específica para a intenção, usa o texto da regra.
-    3. Caso contrário, aplica as regras regex anteriores.
-    4. Sempre passa o resultado pelo ``refine_reply`` para polir o tom.
+    1. Só responde se o último turno for do comprador.
+    2. Classifica usando apenas as últimas falas do comprador.
+    3. Se houver regra específica (ex.: 'quebra'), usa a resposta da regra e refina.
+    4. Senão, aplica regras regex e refina quando fizer sentido.
     """
     order_info = order_info or {}
-    if pairs and pairs[-1][0] != "buyer":
+
+    # 1) último turno precisa ser do comprador
+    if pairs and pairs[-1][0].lower() != "buyer":
         return False, ""
-    text = (
-        " | ".join(t for r, t in pairs[-3:] if r == "buyer")
-        if pairs
-        else " | ".join(buyer_only[-3:])
-    )
-    norm_text = _normalize(text)
+
+    # 2) últimas falas do comprador
+    buyer_msgs = [t for r, t in (pairs or []) if r == "buyer"]
+    if not buyer_msgs:
+        buyer_msgs = buyer_only[:]  # fallback
+
+    recent_buyer_msgs = buyer_msgs[-3:]
+    buyer_last_raw = recent_buyer_msgs[-1] if recent_buyer_msgs else ""
+    norm_text = _normalize(" | ".join(recent_buyer_msgs))
     order_id = order_info.get("orderId", "")
-    messages = buyer_only
-    cls = classify(messages)
+
+    # 3) classificar intenção usando lista de strings (compatível com gemini_client.classify)
+    cls = classify(recent_buyer_msgs)
     if cls.get("needs_reply") is False:
         return False, ""
 
+    # regra especial para quebra com/sem foto
     if cls.get("intent") == "quebra":
         signals = cls.get("signals") or {}
         rule_id = "quebra_com_foto" if signals.get("tem_foto") else "quebra_sem_foto"
         base = get_reply_by_id(rule_id)
         if base:
-            refined = refine_reply(base, norm_text)
+            refined = refine_reply(base, buyer_last_raw)
             return True, refined
 
+    # 4) regex fallback
     reply = RESP_FALLBACK_CURTO
 
-    if ASK_HUMAN.search(norm_text):
+    if NOT_CHECKED_RE.search(norm_text):
+        reply = RESP_NOT_CHECKED
+
+    elif ASK_HUMAN.search(norm_text):
         reply = RESP_HUMANO
 
     elif MISSING.search(norm_text) or ASSEMBLY.search(norm_text):
@@ -177,8 +188,7 @@ def decide_reply(
     elif STATUS_RE.search(norm_text) and order_info.get("status"):
         reply = RESP_STATUS.format(status=order_info["status"])
 
-    elif NOT_CHECKED_RE.search(norm_text):
-        reply = RESP_NOT_CHECKED
-
-    refined = refine_reply(reply, norm_text)
+    # 5) refine só com o último texto do comprador
+    refined = refine_reply(reply, buyer_last_raw)
     return True, refined
+
