@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 from .gemini_client import refine_reply, classify
-from .rules import get_reply_by_id
+from .rules import get_reply_by_id, apply_rules
 from .config import settings
 
 CATALOG_PATH = Path(__file__).resolve().parents[1] / "config" / "catalog_rules.json"
@@ -135,10 +135,18 @@ def decide_reply(
     4. O resultado passa por ``refine_reply`` para polir o tom.
     """
     order_info = order_info or {}
-    history_depth = getattr(settings, "history_depth", 8)
+    history_depth = getattr(settings, "history_depth", 10)
     text = " | ".join(buyer_only[-history_depth:])
     norm_text = _normalize(text)
     order_id = order_info.get("orderId", "")
+
+    # regras determinísticas (regex) antes do classificador LLM
+    decide, rule_reply, action = apply_rules(buyer_only)
+    if action == "skip":
+        return False, ""
+    if decide and rule_reply:
+        refined = refine_reply(rule_reply, norm_text)
+        return True, refined
     cls = classify(buyer_only)
     if cls.get("needs_reply") is False:
         return False, ""
