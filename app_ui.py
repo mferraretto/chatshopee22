@@ -23,7 +23,7 @@ from fastapi import (
     HTTPException,
     Response,
 )
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Template
 
@@ -127,6 +127,9 @@ HTML = Template(
           <div class="row" style="margin-top:8px;">
             <button id="sendBtn">Enviar</button>
             <button id="skipBtn" class="secondary">Pular</button>
+          </div>
+          <div class="row" style="margin-top:8px;">
+            <a class="secondary" href="/export-cases" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Exportar CSV</a>
           </div>
 
           <div class="row" style="margin-top:8px;">
@@ -388,6 +391,15 @@ async def root_head() -> Response:
 async def health_check() -> dict:
     """Health check endpoint used by deployment platforms."""
     return {"status": "ok"}
+
+
+@app.get("/export-cases")
+async def export_cases():
+    p = Path("data/atendimentos.csv")
+    if not p.exists():
+        return JSONResponse({"ok": False, "error": "Nenhum registro ainda."}, status_code=404)
+    # Faz download do CSV
+    return FileResponse(str(p), media_type="text/csv", filename="atendimentos.csv")
 
 
 # Monta /static somente se a pasta existir (evita erro em ambientes sem assets)
