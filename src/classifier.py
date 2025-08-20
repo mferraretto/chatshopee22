@@ -17,7 +17,7 @@ def decide_reply(
     order_info: dict | None = None,
 ) -> Tuple[bool, str]:
     """Decide se deve responder e retorna o rascunho."""
-    history_depth = getattr(settings, "history_depth", 10)
+    history_depth = getattr(settings, "history_depth", 15)
     pairs = _pairs or []
     history = "\n".join(f"{r}: {m}" for r, m in pairs[-history_depth:])
     reply = generate_reply(history)
