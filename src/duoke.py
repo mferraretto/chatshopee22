@@ -128,7 +128,7 @@ class DuokeBot:
     async def _get_page(self, ctx):
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         self.current_page = page
-        page.set_default_timeout(10000)
+        page.set_default_timeout(5000)
         return page
 
     # ---------- utilitários de login / 2FA ----------
@@ -330,7 +330,7 @@ class DuokeBot:
 
         # Espera algo acontecer
         try:
-            await page.wait_for_load_state("networkidle", timeout=15000)
+            await page.wait_for_load_state("networkidle", timeout=10000)
         except Exception:
             pass
 
@@ -351,12 +351,12 @@ class DuokeBot:
             if chat_list_container:
                 await page.wait_for_selector(
                     f"{chat_list_container}, {chat_list_item}, ul.message_main",
-                    timeout=60000,
+                    timeout=30000,
                 )
             else:
                 await page.wait_for_selector(
                     f"{chat_list_item}, ul.message_main",
-                    timeout=60000,
+                    timeout=30000,
                 )
         except Exception:
             # não quebra o fluxo, apenas segue
@@ -390,7 +390,7 @@ class DuokeBot:
                 pass
 
         try:
-            await page.wait_for_load_state("networkidle", timeout=30000)
+            await page.wait_for_load_state("networkidle", timeout=15000)
         except Exception:
             pass
 
@@ -448,13 +448,13 @@ class DuokeBot:
         # Aguarda painel renderizar
         try:
             if SEL.get("message_container"):
-                await page.wait_for_selector(SEL["message_container"], timeout=15000)
+                await page.wait_for_selector(SEL["message_container"], timeout=9000)
             await page.wait_for_function(
                 """() => {
                     const ul = document.querySelector('ul.message_main');
                     return ul && ul.children && ul.children.length > 0;
                 }""",
-                timeout=15000
+                timeout=9000
             )
         except Exception:
             pass
