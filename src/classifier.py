@@ -80,15 +80,10 @@ RESP_DOURADO = (
 )
 
 RESP_STATUS = "O status atual do pedido é **{status}**. Assim que houver novidades, aviso por aqui."
-
 RESP_FALLBACK_CURTO = "Desculpa, não entendi. Pode explicar em uma frase?"
-
-RESP_NOT_CHECKED = (
-    "Sem problema! Quando conseguir verificar, me avise por aqui \U0001F60A."
-)
+RESP_NOT_CHECKED = "Sem problema! Quando conseguir verificar, me avise por aqui \U0001F60A."
 
 # -------------------- helpers --------------------
-
 def _normalize(text: str) -> str:
     text = text.lower().strip()
     text = "".join(
@@ -119,7 +114,6 @@ def prod_defaults(prod: dict | None) -> dict:
     }
 
 # -------------------- main --------------------
-
 def decide_reply(
     pairs: List[Tuple[str, str]] | None,
     buyer_only: List[str],
@@ -133,11 +127,16 @@ def decide_reply(
     4. Sempre passa o resultado pelo ``refine_reply`` para polir o tom.
     """
     order_info = order_info or {}
-    text = " | ".join(t for r, t in pairs[-3:] if r == "buyer") if pairs else " | ".join(buyer_only[-3:])
+
+    # Considere apenas as últimas 8 mensagens enviadas pelo comprador
+    recent_msgs = buyer_only[-8:]
+    text = " | ".join(recent_msgs[-3:])
     norm_text = _normalize(text)
     order_id = order_info.get("orderId", "")
-    messages = buyer_only
-    cls = classify(messages)
+
+    # Classificação baseada SOMENTE nas últimas mensagens do comprador
+    cls = classify(recent_msgs)
+
     if cls.get("needs_reply") is False:
         return False, ""
 
@@ -176,3 +175,4 @@ def decide_reply(
 
     refined = refine_reply(reply, norm_text)
     return True, refined
+
