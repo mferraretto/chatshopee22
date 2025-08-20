@@ -47,6 +47,20 @@ def save_rules(rules: List[Dict]) -> None:
         encoding="utf-8",
     )
 
+
+def get_reply_by_id(rule_id: str) -> Optional[str]:
+    """Retorna o texto da regra com o ``rule_id`` informado.
+
+    Se a regra não existir ou não possuir ``reply`` definido, retorna ``None``.
+    """
+    for rule in load_rules():
+        if rule.get("id") == rule_id:
+            reply = rule.get("reply")
+            if isinstance(reply, str) and reply.strip():
+                return reply
+            return None
+    return None
+
 def _text_matches(
     texts: List[str],
     any_contains: List[str] | None = None,

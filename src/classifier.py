@@ -7,7 +7,8 @@ import unicodedata
 from pathlib import Path
 from typing import List, Tuple
 
-from .gemini_client import refine_reply
+from .gemini_client import refine_reply, classify
+from .rules import get_reply_by_id
 
 CATALOG_PATH = Path(__file__).resolve().parents[1] / "config" / "catalog_rules.json"
 
@@ -118,11 +119,29 @@ def decide_reply(
     buyer_only: List[str],
     order_info: dict | None = None,
 ) -> Tuple[bool, str]:
-    """Decide reply based on regex intents with fallback and optional LLM refinement."""
+    """Decide reply based on intent classification + rules with regex fallback.
+
+    1. Classifica o histórico para detectar intenção (ex.: "quebra").
+    2. Se houver regra específica para a intenção, usa o texto da regra.
+    3. Caso contrário, aplica as regras regex anteriores.
+    4. Sempre passa o resultado pelo ``refine_reply`` para polir o tom.
+    """
     order_info = order_info or {}
     text = " | ".join(t for r, t in pairs[-3:] if r == "buyer") if pairs else " | ".join(buyer_only[-3:])
     norm_text = _normalize(text)
     order_id = order_info.get("orderId", "")
+    messages = [t for _, t in pairs] if pairs else buyer_only
+    cls = classify(messages)
+    if cls.get("needs_reply") is False:
+        return False, ""
+
+    if cls.get("intent") == "quebra":
+        signals = cls.get("signals") or {}
+        rule_id = "quebra_com_foto" if signals.get("tem_foto") else "quebra_sem_foto"
+        base = get_reply_by_id(rule_id)
+        if base:
+            refined = refine_reply(base, norm_text)
+            return True, refined
 
     reply = RESP_FALLBACK_CURTO
 
