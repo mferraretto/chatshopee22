@@ -65,13 +65,10 @@ def decide_reply(
     if not history:
         history = "\n".join(msgs)
 
-    status = order_info.get("status_consolidado", "") if order_info else ""
-    logdesc = order_info.get("latest_desc", "") if order_info else ""
-
     # exemplo de uso do classificador regex (opcional)
     _ = intent_from_text(" ".join(msgs))
-    
-    reply = generate_reply(history, status=status, logdesc=logdesc)
+
+    reply = generate_reply(history, order_info=order_info)
     clean = _sanitize_reply(reply)
     if clean:
         return True, clean
