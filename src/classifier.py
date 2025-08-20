@@ -12,14 +12,13 @@ RESP_FALLBACK_CURTO = (
 
 
 def decide_reply(
-    _pairs: List[Tuple[str, str]] | None,
     buyer_only: List[str],
     order_info: dict | None = None,
 ) -> Tuple[bool, str]:
     """Decide se deve responder e retorna o rascunho."""
     history_depth = getattr(settings, "history_depth", 15)
-    pairs = _pairs or []
-    history = "\n".join(f"{r}: {m}" for r, m in pairs[-history_depth:])
+    msgs = buyer_only[-history_depth:]
+    history = "\n".join(f"buyer: {m}" for m in msgs)
     reply = generate_reply(history)
     if reply.strip():
         return True, reply.strip()
