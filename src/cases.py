@@ -3,15 +3,18 @@ import csv
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
+from openpyxl import Workbook
 
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 CSV_PATH = DATA_DIR / "atendimentos.csv"
+XLSX_PATH = DATA_DIR / "atendimentos.xlsx"
 
 HEADER = [
     "timestamp_utc",
     "order_id",
     "status",
+    "buyer_name",
     "produto",
     "variacao",
     "sku",
@@ -68,6 +71,7 @@ def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
         datetime.now(timezone.utc).isoformat(timespec="seconds"),
         order_info.get("orderId", ""),
         order_info.get("status", ""),
+        order_info.get("buyer_name", ""),
         order_info.get("title", ""),
         order_info.get("variation", ""),
         order_info.get("sku", ""),
@@ -77,3 +81,15 @@ def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
 
     with CSV_PATH.open("a", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow(row)
+
+    export_to_excel()
+
+
+def export_to_excel() -> None:
+    """Converte o CSV de atendimentos para um arquivo Excel."""
+    wb = Workbook()
+    ws = wb.active
+    with CSV_PATH.open("r", newline="", encoding="utf-8") as f:
+        for r in csv.reader(f):
+            ws.append(r)
+    wb.save(XLSX_PATH)

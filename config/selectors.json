@@ -4,6 +4,7 @@
   "message_container": "ul.message_main.watermark_shopee, ul.message_main",
 
   "buyer_message": "ul.message_main li.lt .msg_text .text_cont, ul.message_main li.lt .text_cont, ul.message_main li.lt .bubble .text, ul.message_main li.lt .record_item .content",
+  "buyer_name": ".cont_header .cont_info_name, .cont_header .contact_name, .chat_header .user_name",
 
   "seller_message": "ul.message_main li.rt .msg_text .text_cont, ul.message_main li.rt .text_cont, ul.message_main li.rt .bubble .text, ul.message_main li.rt .record_item .content",
 

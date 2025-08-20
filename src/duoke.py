@@ -556,8 +556,8 @@ class DuokeBot:
     # ---------- painel lateral (pedido) ----------
 
     async def read_sidebar_order_info(self, page) -> dict:
-        """Extrai status, orderId, título, variação, SKU e campos rotulados do painel de pedido."""
-        return await page.evaluate(
+        """Extrai status, orderId, título, variação, SKU, nome do comprador e campos rotulados do painel de pedido."""
+        info = await page.evaluate(
             """
         () => {
           const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();
@@ -626,6 +626,11 @@ class DuokeBot:
         }
         """
         )
+        buyer_name = await DuokeBot._text_or_empty(
+            page.locator(SEL.get("buyer_name", ""))
+        )
+        info["buyer_name"] = buyer_name
+        return info
 
     # ---------- envio de resposta ----------
 
@@ -1010,9 +1015,11 @@ class DuokeBot:
             if not pairs:
                 continue
 
+            buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
+
             # Se a última mensagem do vendedor foi o texto de "quebra_com_foto"
-            # e o cliente respondeu em seguida, apenas marcamos a conversa
-            # com a etiqueta desejada e pulamos sem reprocessar.
+            # e o cliente respondeu em seguida, apenas registramos a conversa
+            # e pulamos sem reprocessar.
             if len(pairs) >= 2:
                 last_role, last_txt = pairs[-1]
                 prev_role, prev_txt = pairs[-2]
@@ -1025,16 +1032,14 @@ class DuokeBot:
                     and "devolu" in prev_lower
                     and "envio de nova peça" in prev_lower
                 ):
-                    await self.apply_label(
-                        page,
-                        label_name=getattr(settings, "label_on_quebra_com_foto", "gpt"),
-                    )
+                    try:
+                        log_case(order_info, buyer_only)
+                    except Exception as e:
+                        print(f"[DEBUG] falha ao registrar atendimento: {e}")
                     print(
-                        "[DEBUG] conversa marcada (cliente respondeu à mensagem de quebra_com_foto)"
+                        "[DEBUG] conversa registrada (cliente respondeu à mensagem de quebra_com_foto)"
                     )
                     continue
-
-            buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
 
             # Últimas N do comprador + 2 do vendedor para contexto
             history_block = self.build_history_from_pairs(
@@ -1073,19 +1078,19 @@ class DuokeBot:
             print(f"[DEBUG] decide: should={should} | Resposta: {reply}")
             decision_txt = (reply or "").strip().lower()
             if (not should) or decision_txt == "ação: skip (pular)".lower():
-                await self.apply_label(
-                    page, label_name=getattr(settings, "label_on_skip", "gpt")
-                )
-                print("[DEBUG] conversa marcada (skip)")
+                try:
+                    log_case(order_info, buyer_only)
+                except Exception as e:
+                    print(f"[DEBUG] falha ao registrar atendimento: {e}")
+                print("[DEBUG] conversa registrada (skip)")
                 continue
 
-            if buyer_only:
-                if buyer_wants_missing_parts(buyer_only[-1]):
-                    await self.apply_label(
-                        page,
-                        label_name=getattr(settings, "label_on_missing_parts", "gpt"),
-                    )
-                    print("[DEBUG] conversa marcada (quer peças faltantes)")
+            if buyer_only and buyer_wants_missing_parts(buyer_only[-1]):
+                try:
+                    log_case(order_info, buyer_only)
+                except Exception as e:
+                    print(f"[DEBUG] falha ao registrar atendimento: {e}")
+                print("[DEBUG] conversa registrada (quer peças faltantes)")
 
             if order_info.get("orderId") and "{ORDER_ID}" in reply:
                 reply = reply.replace("{ORDER_ID}", order_info["orderId"])
