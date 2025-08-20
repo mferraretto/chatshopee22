@@ -1,14 +1,18 @@
 {
   "chat_list_item": ".list_container_content .virtual_list .list > li, .contact_list .virtual_list .list > li",
 
-  "message_container": "ul.message_main.watermark_shopee, ul.message_main",
+  "messages_container": "ul.message_main.watermark_shopee, ul.message_main",
 
-  "buyer_message": "ul.message_main li.lt .msg_text .text_cont, ul.message_main li.lt .text_cont, ul.message_main li.lt .bubble .text, ul.message_main li.lt .record_item .content",
+  "buyer_bubbles": "ul.message_main li.lt .msg_cont .msg_text .text_cont",
+  "buyer_bubbles_fallback": "ul.message_main li.lt .text_cont",
+
+  "seller_bubbles": "ul.message_main li.rt .msg_cont .msg_text .text_cont",
+  "seller_bubbles_fallback": "ul.message_main li.rt .text_cont",
+
+  "buyer_badge_noise": "ul.message_main li.lt .send_account",
+  "quote_blocks": "ul.message_main li .quote_msg, ul.message_main li .quote_msg_cont",
+
   "buyer_name": ".cont_header .cont_info_name, .cont_header .contact_name, .chat_header .user_name",
-
-  "seller_message": "ul.message_main li.rt .msg_text .text_cont, ul.message_main li.rt .text_cont, ul.message_main li.rt .bubble .text, ul.message_main li.rt .record_item .content",
-
-  "message_text": "ul.message_main .msg_text .text_cont, ul.message_main .text_cont, ul.message_main .bubble .text, ul.message_main .record_item .content",
 
   "input_textarea": "textarea, [contenteditable='true']",
 
@@ -27,16 +31,16 @@
   "tag_item_active": ".label_item.active",
   "tag_confirm": ".el-dialog__footer .el-button--primary, .select_label_dialog .el-button--primary",
 
-  "order_status_tag": "div.order_item_status .order_item_status_tags .el-tag, div.order_item_status .el-tag",
+  "status_badge": "div.order_item_status .el-tag",
+  "order_status_tag": "div.order_item_status .el-tag",
 
-  "order_code": "div.order_item_title span.mr_4",
-  "order_datetime": "div.order_item_time",
-
-  "product_title": ".order_item_products .product_url",
-  "product_variation": ".order_item_products_item_info_variation_name span",
-  "product_sku": ".order_item_products_item_info_sku span",
-  "product_price": ".order_item_products .product_other_info > div:nth-child(1)",
-  "product_qty": ".order_item_products .product_other_info > div:nth-child(2)",
+  "order_items_root": "div.order_item_products",
+  "order_item": "div.order_item_products_item",
+  "item_title": ".order_item_products_item_info_title_name_url .product_url",
+  "item_variation": ".order_item_products_item_info_variation_name span[title]",
+  "item_sku": ".order_item_products_item_info_sku span[title]",
+  "item_price_block": ".product_other_info > div:nth-child(1)",
+  "item_qty_block": ".product_other_info > div:nth-child(3)",
 
   "buyer_payment_amount": "div.order_item_buyer .flex:has(label[title='Buyer payment amount']) span.fw_700",
   "payment_method": "div.order_item_buyer .flex:has(label[title='Payment Method']) span",

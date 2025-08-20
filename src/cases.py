@@ -1,5 +1,6 @@
 from __future__ import annotations
 import csv
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -9,6 +10,8 @@ DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 CSV_PATH = DATA_DIR / "atendimentos.csv"
 XLSX_PATH = DATA_DIR / "atendimentos.xlsx"
+SNAPSHOTS_PATH = DATA_DIR / "conversation_snapshots.jsonl"
+SKIPPED_PATH = DATA_DIR / "conversation_skips.jsonl"
 
 HEADER = [
     "timestamp_utc",
@@ -93,3 +96,20 @@ def export_to_excel() -> None:
         for r in csv.reader(f):
             ws.append(r)
     wb.save(XLSX_PATH)
+
+
+def save_conversation_snapshot(data: Dict[str, Any]) -> None:
+    SNAPSHOTS_PATH.parent.mkdir(exist_ok=True)
+    with SNAPSHOTS_PATH.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(data, ensure_ascii=False) + "\n")
+
+
+def mark_conversation_skipped(order_id: str, reason: str) -> None:
+    payload = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "order_id": order_id,
+        "reason": reason,
+    }
+    SKIPPED_PATH.parent.mkdir(exist_ok=True)
+    with SKIPPED_PATH.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
