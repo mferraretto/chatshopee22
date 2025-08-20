@@ -7,9 +7,8 @@ import re
 from .gemini_client import generate_reply
 from .config import settings
 
-RESP_FALLBACK_CURTO = (
-    "Desculpe, não entendi muito bem sua mensagem. Você poderia explicar um pouco melhor para que eu consiga te ajudar?"
-)
+RESP_FALLBACK_CURTO = "Desculpe, não entendi muito bem sua mensagem. Você poderia explicar um pouco melhor para que eu consiga te ajudar?"
+
 
 def _sanitize_reply(text: str) -> str:
     if not text:
@@ -31,15 +30,20 @@ def _sanitize_reply(text: str) -> str:
     m = re.search(r'(?is)\bResposta:\s*"(.*?)"\s*$', t)
     if m:
         return m.group(1).strip()
-    m2 = re.search(r'(?is)\bResposta:\s*(.+)$', t)
+    m2 = re.search(r"(?is)\bResposta:\s*(.+)$", t)
     if m2:
         return m2.group(1).strip()
 
     return t
 
 
-ARCO = re.compile(r"\b(arco|arcos|di[âa]metro do arco|tamanho do arco|montar menor|reduzir tamanho)\b", re.I)
-CIL = re.compile(r"\b(cilindro|cilindros|trio compacto|cilindro pequeno|cilindro errado)\b", re.I)
+ARCO = re.compile(
+    r"\b(arco|arcos|di[âa]metro do arco|tamanho do arco|montar menor|reduzir tamanho)\b",
+    re.I,
+)
+CIL = re.compile(
+    r"\b(cilindro|cilindros|trio compacto|cilindro pequeno|cilindro errado)\b", re.I
+)
 
 
 def intent_from_text(txt: str) -> str:
@@ -48,6 +52,7 @@ def intent_from_text(txt: str) -> str:
     if CIL.search(txt) and not ARCO.search(txt):
         return "cilindro_pequeno"
     return "fallback"
+
 
 def decide_reply(
     pairs: List[Tuple[str, str]],

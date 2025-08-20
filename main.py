@@ -22,16 +22,22 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 # ===== Configurações da Aplicação =====
-SESS_DIR = Path("sessions") # Diretório para armazenar os arquivos de sessão
+SESS_DIR = Path("sessions")  # Diretório para armazenar os arquivos de sessão
 SESS_DIR.mkdir(exist_ok=True)
-SECRET = os.getenv("SESSION_ENC_SECRET", "troque-isto-no-render") # Chave secreta para criptografia
-LOGIN_WAIT_TIMEOUT = 180000 # Tempo máximo de espera para o login (em ms)
+SECRET = os.getenv(
+    "SESSION_ENC_SECRET", "troque-isto-no-render"
+)  # Chave secreta para criptografia
+LOGIN_WAIT_TIMEOUT = 180000  # Tempo máximo de espera para o login (em ms)
+
 
 # ===== Funções de Criptografia para salvar a sessão do Playwright de forma segura =====
 def _derive_key(secret: str, salt: bytes) -> bytes:
     """Deriva uma chave segura a partir de uma senha e um sal usando PBKDF2."""
-    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100_000)
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100_000
+    )
     return kdf.derive(secret.encode("utf-8"))
+
 
 def encrypt_bytes(data: bytes, secret: str) -> bytes:
     """Criptografa dados usando AES-GCM. Retorna o sal, IV e o texto cifrado."""
@@ -42,6 +48,7 @@ def encrypt_bytes(data: bytes, secret: str) -> bytes:
     ct = aes.encrypt(iv, data, None)
     return salt + iv + ct
 
+
 def decrypt_bytes(packed: bytes, secret: str) -> bytes:
     """Descriptografa dados empacotados pelo `encrypt_bytes`."""
     salt, iv, ct = packed[:16], packed[16:28], packed[28:]
@@ -49,14 +56,17 @@ def decrypt_bytes(packed: bytes, secret: str) -> bytes:
     aes = AESGCM(key)
     return aes.decrypt(iv, ct, None)
 
+
 def session_path(user_id: str) -> Path:
     """Gera o caminho do arquivo de sessão para um dado user_id."""
     return SESS_DIR / f"{user_id}.bin"
+
 
 # ===== Estado de login pendente (em memória, com TTL) =====
 # Isso é usado para manter o estado entre as duas requisições (iniciar e enviar código)
 class Pending:
     """Classe para armazenar o estado de uma tentativa de login pendente."""
+
     def __init__(self, browser, context, page, user_id):
         self.browser = browser
         self.context = context
@@ -64,8 +74,10 @@ class Pending:
         self.user_id = user_id
         self.created = asyncio.get_event_loop().time()
 
-PENDING: Dict[str, Pending] = {} # Dicionário para armazenar as tentativas pendentes
+
+PENDING: Dict[str, Pending] = {}  # Dicionário para armazenar as tentativas pendentes
 PENDING_TTL = 10 * 60  # Tempo de vida da tentativa pendente: 10 minutos
+
 
 async def cleanup_pending():
     """Remove tentativas de login pendentes que expiraram."""
@@ -78,13 +90,16 @@ async def cleanup_pending():
             pass
         PENDING.pop(k, None)
 
+
 # ===== Definição da API FastAPI =====
 app = FastAPI()
+
 
 # Rota de health check. Usada por plataformas de deploy (como o Render) para verificar se a app está rodando.
 @app.get("/healthz")
 async def health_check():
     return {"status": "ok"}
+
 
 # Rota principal que serve a página HTML de login.
 @app.get("/", response_class=HTMLResponse)
@@ -132,6 +147,7 @@ def home():
     </body></html>
     """
 
+
 # Rota para iniciar o processo de login
 @app.post("/duoke/login/start")
 async def duoke_login_start(
@@ -140,7 +156,7 @@ async def duoke_login_start(
     password: str = Form(...),
     captcha: Optional[str] = Form(None),
 ):
-    await cleanup_pending() # Limpa tentativas expiradas antes de começar
+    await cleanup_pending()  # Limpa tentativas expiradas antes de começar
     p = None
     browser = None
     try:
@@ -148,8 +164,7 @@ async def duoke_login_start(
         p = await async_playwright().start()
         # Lança o navegador Chromium em modo headless
         browser = await p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox"]
+            headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"]
         )
         ctx = await browser.new_context()
         page = await ctx.new_page()
@@ -171,7 +186,9 @@ async def duoke_login_start(
 
         # Preenche o formulário de login com as informações fornecidas
         await page.fill("input[type='email'], input[placeholder='Email']", email)
-        await page.fill("input[type='password'], input[placeholder='Password']", password)
+        await page.fill(
+            "input[type='password'], input[placeholder='Password']", password
+        )
         if captcha:
             try:
                 await page.fill(
@@ -190,23 +207,41 @@ async def duoke_login_start(
             enc = encrypt_bytes(tmp.read_bytes(), SECRET)
             session_path(user_id).write_bytes(enc)
             tmp.unlink(missing_ok=True)
-            return JSONResponse({"ok": True, "status": "LOGGED", "msg": "Sessão criada sem pedir código."})
+            return JSONResponse(
+                {
+                    "ok": True,
+                    "status": "LOGGED",
+                    "msg": "Sessão criada sem pedir código.",
+                }
+            )
         except Exception:
             pass
 
         # Se não foi para o dashboard, tenta detectar a UI de verificação de código
-        code_input = page.locator("input[name*='code' i], input[placeholder*='code' i], input[placeholder*='verification' i], input[type='tel']")
+        code_input = page.locator(
+            "input[name*='code' i], input[placeholder*='code' i], input[placeholder*='verification' i], input[type='tel']"
+        )
         if await code_input.count() == 0:
             try:
                 await code_input.wait_for(timeout=8000)
             except Exception:
                 # Se não encontrar o campo de código, assume que o login falhou por outro motivo
-                raise HTTPException(400, "Não foi possível localizar o campo de código. Verifique o login.")
+                raise HTTPException(
+                    400,
+                    "Não foi possível localizar o campo de código. Verifique o login.",
+                )
 
         # Cria uma tentativa pendente para o segundo passo (código)
         attempt_id = uuid.uuid4().hex
         PENDING[attempt_id] = Pending(browser, ctx, page, user_id)
-        return JSONResponse({"ok": True, "status": "NEED_CODE", "attempt_id": attempt_id, "msg": "Código de verificação necessário."})
+        return JSONResponse(
+            {
+                "ok": True,
+                "status": "NEED_CODE",
+                "attempt_id": attempt_id,
+                "msg": "Código de verificação necessário.",
+            }
+        )
 
     except HTTPException:
         raise
@@ -216,9 +251,12 @@ async def duoke_login_start(
         if p and not browser:
             await p.stop()
 
+
 # Rota para enviar o código de verificação
 @app.post("/duoke/login/code")
-async def duoke_login_code(attempt_id: str = Form(...), user_id: str = Form(...), code: str = Form(...)):
+async def duoke_login_code(
+    attempt_id: str = Form(...), user_id: str = Form(...), code: str = Form(...)
+):
     await cleanup_pending()
     pend = PENDING.get(attempt_id)
     if not pend or pend.user_id != user_id:
@@ -235,7 +273,16 @@ async def duoke_login_code(attempt_id: str = Form(...), user_id: str = Form(...)
 
         # Clica no botão para confirmar/verificar
         try:
-            await page.get_by_role("button", name=lambda n: n and ('verify' in n.lower() or 'confirm' in n.lower() or 'submit' in n.lower() or 'login' in n.lower())).click(timeout=2000)
+            await page.get_by_role(
+                "button",
+                name=lambda n: n
+                and (
+                    "verify" in n.lower()
+                    or "confirm" in n.lower()
+                    or "submit" in n.lower()
+                    or "login" in n.lower()
+                ),
+            ).click(timeout=2000)
         except PWTimeoutError:
             await page.locator("button").first.click()
 
@@ -250,7 +297,9 @@ async def duoke_login_code(attempt_id: str = Form(...), user_id: str = Form(...)
         # Encerra o navegador e remove a tentativa pendente
         await browser.close()
         PENDING.pop(attempt_id, None)
-        return JSONResponse({"ok": True, "status": "LOGGED", "msg": "Sessão criada com sucesso."})
+        return JSONResponse(
+            {"ok": True, "status": "LOGGED", "msg": "Sessão criada com sucesso."}
+        )
 
     except Exception as e:
         try:
@@ -259,10 +308,12 @@ async def duoke_login_code(attempt_id: str = Form(...), user_id: str = Form(...)
             PENDING.pop(attempt_id, None)
         raise HTTPException(400, f"Falha ao verificar código: {e}")
 
+
 # Rota para verificar o status da sessão de um usuário
 @app.get("/duoke/status")
 def duoke_status(user_id: str):
     return {"logged": session_path(user_id).exists()}
+
 
 # Rota para fazer logout
 @app.post("/duoke/logout")

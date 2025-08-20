@@ -6,9 +6,12 @@ from .classifier import decide_reply
 
 STATE_FILE = Path(__file__).resolve().parents[1] / "storage_state.json"
 
+
 async def main():
     if not STATE_FILE.exists():
-        print("[RUN_ONCE] Sessão não encontrada. Execute `python -m src.login` para fazer login antes de iniciar o bot.")
+        print(
+            "[RUN_ONCE] Sessão não encontrada. Execute `python -m src.login` para fazer login antes de iniciar o bot."
+        )
         return
     bot = DuokeBot()
 
@@ -23,6 +26,6 @@ async def main():
 
     await bot.run_once(debug_reply)
 
+
 if __name__ == "__main__":
     asyncio.run(main())
-

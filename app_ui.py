@@ -1,6 +1,7 @@
 # app_ui.py
 # --- Força event loop correto no Windows (necessário para subprocess do Playwright) ---
 import sys, asyncio
+
 if sys.platform.startswith("win"):
     try:
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -13,7 +14,15 @@ from pathlib import Path
 from typing import Optional, Set
 from collections import deque
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form, HTTPException, Response
+from fastapi import (
+    FastAPI,
+    WebSocket,
+    WebSocketDisconnect,
+    Request,
+    Form,
+    HTTPException,
+    Response,
+)
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Template
@@ -30,19 +39,24 @@ LAST_ERR: Optional[str] = None
 LOGS = deque(maxlen=4000)
 MANUAL: bool = False
 
+
 def log(line: str):
     s = f"[{time.strftime('%H:%M:%S')}] {line}"
     LOGS.append(s)
     print(s)
 
+
 # ===== Arquivo de sessão do Duoke (Playwright) =====
 STATE_PATH = Path("storage_state.json")
+
 
 def duoke_is_connected() -> bool:
     return STATE_PATH.exists() and STATE_PATH.stat().st_size > 10  # heurística simples
 
+
 # ===== HTML (UI single-file com tabs) =====
-HTML = Template(r"""
+HTML = Template(
+    r"""
 <!doctype html>
 <html>
 <head>
@@ -358,7 +372,8 @@ document.getElementById('btnDuokeDisconnect').addEventListener('click', async ()
 </script>
 </body>
 </html>
-""")
+"""
+)
 
 app = FastAPI()
 
@@ -374,10 +389,12 @@ async def health_check() -> dict:
     """Health check endpoint used by deployment platforms."""
     return {"status": "ok"}
 
+
 # Monta /static somente se a pasta existir (evita erro em ambientes sem assets)
 static_dir = Path("static")
 if static_dir.exists() and static_dir.is_dir():
     app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
@@ -396,16 +413,19 @@ async def index():
         max_conv=(settings.max_conversations or 0),
         depth=(settings.history_depth or 5),
         delay=(settings.delay_between_actions or 1.0),
-        input_sel=input_default
+        input_sel=input_default,
     )
+
 
 @app.get("/rules")
 async def rules():
     return JSONResponse(load_rules())
 
+
 @app.get("/reload-rules")
 async def reload_rules():
     return RedirectResponse("/", status_code=303)
+
 
 @app.post("/save-rule")
 async def save_rule(
@@ -413,7 +433,7 @@ async def save_rule(
     active: str = Form("true"),
     action: str = Form(""),
     any_contains: str = Form(""),
-    reply: str = Form("")
+    reply: str = Form(""),
 ):
     rules = load_rules()
     found = None
@@ -424,7 +444,9 @@ async def save_rule(
     payload = {
         "id": id,
         "active": active.lower() == "true",
-        "match": {"any_contains": [s.strip() for s in any_contains.split(",") if s.strip()]},
+        "match": {
+            "any_contains": [s.strip() for s in any_contains.split(",") if s.strip()]
+        },
     }
     if action:
         payload["action"] = action
@@ -437,12 +459,13 @@ async def save_rule(
     save_rules(rules)
     return RedirectResponse("/", status_code=303)
 
+
 @app.post("/save-settings")
 async def save_settings(
     max_conversations: int = Form(...),
     history_depth: int = Form(...),
     delay_between_actions: float = Form(...),
-    input_selector: str = Form(...)
+    input_selector: str = Form(...),
 ):
     # Atualiza em memória
     settings.max_conversations = max_conversations
@@ -454,16 +477,20 @@ async def save_settings(
         if sel_path:
             sel = json.loads(sel_path.read_text(encoding="utf-8"))
             sel["input_textarea"] = input_selector
-            sel_path.write_text(json.dumps(sel, ensure_ascii=False, indent=2), encoding="utf-8")
+            sel_path.write_text(
+                json.dumps(sel, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
             log("[UI] selectors.json atualizado (input_textarea).")
     except Exception as e:
         log(f"[UI] falha ao atualizar selectors.json: {type(e).__name__}: {e!r}")
     return RedirectResponse("/", status_code=303)
 
+
 # ===== Endpoints de Conexão Duoke (Playwright) =====
 @app.get("/duoke/status")
 async def duoke_status():
     return {"connected": duoke_is_connected()}
+
 
 @app.delete("/duoke/connect")
 async def duoke_disconnect():
@@ -474,14 +501,20 @@ async def duoke_disconnect():
     except Exception as e:
         raise HTTPException(500, f"Falha ao remover sessão: {e}")
 
+
 @app.post("/duoke/connect")
-async def duoke_connect(email: str = Form(...), password: str = Form(...), code: str = Form("")):
+async def duoke_connect(
+    email: str = Form(...), password: str = Form(...), code: str = Form("")
+):
     """
     Faz login no Duoke com Playwright headless e persiste cookies em storage_state.json.
     """
     # Import local para não exigir Playwright até alguém usar este endpoint
     try:
-        from playwright.async_api import async_playwright, TimeoutError as PWTimeoutError
+        from playwright.async_api import (
+            async_playwright,
+            TimeoutError as PWTimeoutError,
+        )
     except Exception as e:
         raise HTTPException(500, f"Playwright não instalado/configurado: {e}")
 
@@ -505,7 +538,7 @@ async def duoke_connect(email: str = Form(...), password: str = Form(...), code:
 
             # Seletores comuns; ajuste se o Duoke mudar
             email_sel = "input[type='email'], input[placeholder*='mail' i]"
-            pass_sel  = "input[type='password'], input[placeholder*='senha' i], input[placeholder*='password' i]"
+            pass_sel = "input[type='password'], input[placeholder*='senha' i], input[placeholder*='password' i]"
 
             # Se não houver campo de email, pode já estar logado
             if await page.locator(email_sel).count() == 0:
@@ -526,10 +559,17 @@ async def duoke_connect(email: str = Form(...), password: str = Form(...), code:
 
             # Tenta botão Login por role/name
             try:
-                await page.get_by_role("button", name=re.compile(r"(login|entrar|sign\s*in|iniciar\s*sess[aã]o)", re.I)).click(timeout=3000)
+                await page.get_by_role(
+                    "button",
+                    name=re.compile(
+                        r"(login|entrar|sign\s*in|iniciar\s*sess[aã]o)", re.I
+                    ),
+                ).click(timeout=3000)
             except Exception:
                 # Fallback por texto parcial
-                btn = page.locator("button:has-text('Login'), button:has-text('Entrar'), button:has-text('Iniciar sessão')")
+                btn = page.locator(
+                    "button:has-text('Login'), button:has-text('Entrar'), button:has-text('Iniciar sessão')"
+                )
                 if await btn.count() > 0:
                     await btn.first.click()
                 else:
@@ -551,8 +591,11 @@ async def duoke_connect(email: str = Form(...), password: str = Form(...), code:
     except Exception as e:
         raise HTTPException(500, f"Falha no login: {e}")
 
+
 # ===== Streaming via WebSocket =====
 CLIENTS: Set[WebSocket] = set()
+
+
 def ws_broadcast(payload: dict):
     data = json.dumps(payload, ensure_ascii=False)
     for ws in list(CLIENTS):
@@ -560,6 +603,7 @@ def ws_broadcast(payload: dict):
             asyncio.create_task(ws.send_text(data))
         except Exception:
             CLIENTS.discard(ws)
+
 
 @app.websocket("/ws")
 async def ws(ws: WebSocket):
@@ -571,7 +615,7 @@ async def ws(ws: WebSocket):
             await ws.send_text(json.dumps({"logline": line}, ensure_ascii=False))
     except Exception:
         pass
-    ws_broadcast({"logline":"[UI] Conectado."})
+    ws_broadcast({"logline": "[UI] Conectado."})
     try:
         while True:
             # Mantém WS aberto; cliente envia 'ping' periódico
@@ -581,9 +625,11 @@ async def ws(ws: WebSocket):
     except Exception:
         CLIENTS.discard(ws)
 
+
 # ===== Bot Runner =====
 _task: Optional[asyncio.Task] = None
 _bot: Optional[DuokeBot] = None  # referência ao bot para espelho/ações
+
 
 async def _mirror_loop():
     # Espelha a aba atual do Playwright
@@ -600,6 +646,7 @@ async def _mirror_loop():
         # Throttle para reduzir uso de CPU/Rede
         await asyncio.sleep(2.5)
 
+
 async def _run_cycle(run_once: bool):
     # run_once=True executa uma varredura; False mantém laço infinito
     global RUNNING, LAST_ERR, _task, _bot
@@ -609,9 +656,25 @@ async def _run_cycle(run_once: bool):
 
     # Hook para UI ver o que foi lido e a resposta sugerida
     async def hook(pairs, buyer_only, order_info=None) -> tuple[bool, str]:
-        ws_broadcast({"snapshot": {"reading": [list(p) for p in pairs], "proposed": "", "running": True}})
+        ws_broadcast(
+            {
+                "snapshot": {
+                    "reading": [list(p) for p in pairs],
+                    "proposed": "",
+                    "running": True,
+                }
+            }
+        )
         should, reply = decide_reply(pairs, buyer_only, order_info)
-        ws_broadcast({"snapshot": {"reading": [list(p) for p in pairs], "proposed": reply, "running": True}})
+        ws_broadcast(
+            {
+                "snapshot": {
+                    "reading": [list(p) for p in pairs],
+                    "proposed": reply,
+                    "running": True,
+                }
+            }
+        )
         return should, reply
 
     mirror_task = asyncio.create_task(_mirror_loop())
@@ -632,6 +695,7 @@ async def _run_cycle(run_once: bool):
         ws_broadcast({"snapshot": {"running": False}})
         _bot = None
 
+
 @app.post("/start")
 async def start():
     global _task, RUNNING
@@ -642,6 +706,7 @@ async def start():
     ws_broadcast({"snapshot": {"running": True}})
     _task = asyncio.create_task(_run_cycle(run_once=False))
     return RedirectResponse("/", status_code=303)
+
 
 @app.post("/run-once")
 async def run_once():
@@ -654,6 +719,7 @@ async def run_once():
     _task = asyncio.create_task(_run_cycle(run_once=True))
     return RedirectResponse("/", status_code=303)
 
+
 @app.post("/stop")
 async def stop():
     global RUNNING, _task
@@ -662,9 +728,11 @@ async def stop():
         _task.cancel()
     return RedirectResponse("/", status_code=303)
 
+
 @app.get("/status")
 async def status():
     return {"running": RUNNING, "last_error": LAST_ERR}
+
 
 # Ações manuais da UI (enviar/pular)
 @app.post("/action/send")
@@ -682,6 +750,7 @@ async def action_send(req: Request):
             log(f"[UI] erro ao enviar: {type(e).__name__}: {e}")
             return JSONResponse({"ok": False, "error": str(e)})
     return JSONResponse({"ok": True})
+
 
 @app.post("/action/skip")
 async def action_skip():

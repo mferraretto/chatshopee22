@@ -8,20 +8,26 @@ from pathlib import Path
 from typing import Optional, Tuple
 import time
 
-from playwright.async_api import async_playwright, Error as PwError, TimeoutError as PWTimeoutError
+from playwright.async_api import (
+    async_playwright,
+    Error as PwError,
+    TimeoutError as PWTimeoutError,
+)
 from .config import settings
 from .classifier import RESP_FALLBACK_CURTO
 
 # Carrega seletores configuráveis
 SEL = json.loads(
-    (Path(__file__).resolve().parents[1] / "config" / "selectors.json")
-    .read_text(encoding="utf-8")
+    (Path(__file__).resolve().parents[1] / "config" / "selectors.json").read_text(
+        encoding="utf-8"
+    )
 )
 
 WANTS_PARTS_RE = re.compile(
     r"(quero|prefiro|pode|manda|mandar|envia|enviar|me envia|me mandar).{0,25}(peça|peças|pecas|as peças|as pecas|a peça|a peca)",
     re.I,
 )
+
 
 def buyer_wants_missing_parts(text: str) -> bool:
     t = (text or "").strip().lower()
@@ -41,11 +47,13 @@ def buyer_wants_missing_parts(text: str) -> bool:
     ]
     return any(s in t for s in simples)
 
+
 # Botões de confirmação comuns em modais (várias línguas)
 CONFIRM_RE = re.compile(
     r"(confirm|confirmar|ok|continue|verify|submit|login|entrar|fechar|iniciar\s*sess[aã]o|确认|確定|确定)",
     re.I,
 )
+
 
 def _env_or_settings(name_env: str, name_settings: str, default: str = "") -> str:
     v = os.getenv(name_env)
@@ -53,11 +61,13 @@ def _env_or_settings(name_env: str, name_settings: str, default: str = "") -> st
         return v
     return str(getattr(settings, name_settings, default) or "")
 
+
 class DuokeBot:
     """
     Bot Duoke independente de UI. Mantém referência à página atual para o espelho,
     faz login (com fechamento de modal), tenta detectar 2FA e expõe método para submeter o código.
     """
+
     def __init__(self, storage_state_path: str = "storage_state.json"):
         # Mantido por compat
         self.storage_state_path = storage_state_path
@@ -116,15 +126,18 @@ class DuokeBot:
         await ctx.route("**/*", _route_handler)
 
         # injeta CSS para não depender de animações/transitions que atrasam cliques
-        await ctx.add_init_script("""
+        await ctx.add_init_script(
+            """
         (() => {
           const style = document.createElement('style');
           style.innerHTML = '*{animation:none!important;transition:none!important;}';
           document.addEventListener('DOMContentLoaded', () => document.head.appendChild(style));
         })();
-        """)
+        """
+        )
 
         return ctx
+
     async def _get_page(self, ctx):
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         self.current_page = page
@@ -137,7 +150,9 @@ class DuokeBot:
         """Tenta clicar num botão de confirmação no frame dado."""
         # por role/name
         try:
-            await target.get_by_role("button", name=CONFIRM_RE).first.click(timeout=1200)
+            await target.get_by_role("button", name=CONFIRM_RE).first.click(
+                timeout=1200
+            )
             return "role"
         except PWTimeoutError:
             pass
@@ -201,7 +216,7 @@ class DuokeBot:
         Retorna (frame, sel_email, sel_pass). Se estiver na própria page, frame = page.
         """
         selectors_email = ["input[type='email']", "input[placeholder*='email' i]"]
-        selectors_pass  = ["input[type='password']", "input[placeholder*='password' i]"]
+        selectors_pass = ["input[type='password']", "input[placeholder*='password' i]"]
 
         # própria página
         for se in selectors_email:
@@ -320,7 +335,12 @@ class DuokeBot:
 
         # Clica Login (vários nomes)
         try:
-            await fr.get_by_role("button", name=re.compile(r"(login|entrar|sign\s*in|iniciar\s*sess[aã]o|提交|登录)", re.I)).click(timeout=2500)
+            await fr.get_by_role(
+                "button",
+                name=re.compile(
+                    r"(login|entrar|sign\s*in|iniciar\s*sess[aã]o|提交|登录)", re.I
+                ),
+            ).click(timeout=2500)
         except PWTimeoutError:
             # fallback: primeiro botão visível
             try:
@@ -454,7 +474,7 @@ class DuokeBot:
                     const ul = document.querySelector('ul.message_main');
                     return ul && ul.children && ul.children.length > 0;
                 }""",
-                timeout=9000
+                timeout=9000,
             )
         except Exception:
             pass
@@ -465,7 +485,9 @@ class DuokeBot:
         except Exception:
             pass
 
-        await page.wait_for_timeout(int(getattr(settings, "delay_between_actions", 1.0) * 1000))
+        await page.wait_for_timeout(
+            int(getattr(settings, "delay_between_actions", 1.0) * 1000)
+        )
         return True
 
     # ---------- leitura de mensagens ----------
@@ -478,14 +500,17 @@ class DuokeBot:
 
             # Força mais histórico: rola ao topo algumas vezes
             try:
-                container = page.locator(SEL.get("message_container", "ul.message_main")).first
+                container = page.locator(
+                    SEL.get("message_container", "ul.message_main")
+                ).first
                 for _ in range(3):
                     await container.evaluate("(el) => { el.scrollTop = 0; }")
                     await page.wait_for_timeout(120)
             except Exception:
                 pass
 
-            texts = await items.evaluate_all("""
+            texts = await items.evaluate_all(
+                """
                 (els) => els.map(li => {
                     const cls = (li.className || '').toLowerCase();
                     const role = cls.includes('lt') ? 'buyer' : (cls.includes('rt') ? 'seller' : 'system');
@@ -493,7 +518,8 @@ class DuokeBot:
                     const txt = (txtNode?.innerText || '').trim();
                     return txt && role !== 'system' ? [role, txt] : null;
                 }).filter(Boolean)
-            """)
+            """
+            )
             out = texts[-depth:]
         except Exception:
             pass
@@ -530,7 +556,8 @@ class DuokeBot:
 
     async def read_sidebar_order_info(self, page) -> dict:
         """Extrai status, orderId, título, variação, SKU e campos rotulados do painel de pedido."""
-        return await page.evaluate("""
+        return await page.evaluate(
+            """
         () => {
           const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();
 
@@ -596,12 +623,15 @@ class DuokeBot:
 
           return { status, orderId, title, variation, sku, fields };
         }
-        """)
+        """
+        )
 
     # ---------- envio de resposta ----------
 
     async def send_reply(self, page, text: str):
-        candidates = [s.strip() for s in SEL.get("input_textarea", "").split(",") if s.strip()]
+        candidates = [
+            s.strip() for s in SEL.get("input_textarea", "").split(",") if s.strip()
+        ]
         box = None
 
         for sel in candidates:
@@ -617,11 +647,15 @@ class DuokeBot:
         if not box:
             try:
                 box = page.get_by_placeholder(
-                    re.compile(r"Type a message here|press Enter to send|Enter to send", re.I)
+                    re.compile(
+                        r"Type a message here|press Enter to send|Enter to send", re.I
+                    )
                 ).first
                 await box.wait_for(state="visible", timeout=3000)
             except Exception:
-                raise RuntimeError("Campo de mensagem não encontrado (todos candidatos estavam ocultos).")
+                raise RuntimeError(
+                    "Campo de mensagem não encontrado (todos candidatos estavam ocultos)."
+                )
 
         await box.click()
         try:
@@ -656,7 +690,10 @@ class DuokeBot:
             await btn.click()
 
             # 2) Modal de etiquetas
-            modal_sel = SEL.get("tag_modal", ".el-dialog.select_label_dialog, .el-dialog__wrapper:has(.label_item)")
+            modal_sel = SEL.get(
+                "tag_modal",
+                ".el-dialog.select_label_dialog, .el-dialog__wrapper:has(.label_item)",
+            )
             modal = page.locator(modal_sel).first
             await modal.wait_for(state="visible", timeout=timeout)
 
@@ -667,7 +704,9 @@ class DuokeBot:
             await tag_span.click()
 
             # 4) Validar que o card ficou ativo
-            tag_card = tag_span.locator("xpath=ancestor::div[contains(@class,'label_item')]").first
+            tag_card = tag_span.locator(
+                "xpath=ancestor::div[contains(@class,'label_item')]"
+            ).first
             try:
                 await tag_card.wait_for(state="attached", timeout=timeout)
                 await page.wait_for_function(
@@ -726,9 +765,9 @@ class DuokeBot:
                     continue
                 if method:
                     try:
-                        await fr.locator(",".join(wrappers)).locator(":visible").first.wait_for(
-                            state="hidden", timeout=3000
-                        )
+                        await fr.locator(",".join(wrappers)).locator(
+                            ":visible"
+                        ).first.wait_for(state="hidden", timeout=3000)
                     except Exception:
                         await page.wait_for_timeout(300)
                     where = "iframe" if fr is not page else "page"
@@ -795,7 +834,9 @@ class DuokeBot:
             if sub_sel:
                 btn = page.locator(sub_sel).first
             else:
-                btn = page.get_by_role("button", name=re.compile(r"(Verify|Confirm|Enviar|OK)", re.I)).first
+                btn = page.get_by_role(
+                    "button", name=re.compile(r"(Verify|Confirm|Enviar|OK)", re.I)
+                ).first
             await btn.click(timeout=5000)
         except Exception:
             # fallback: Enter
@@ -813,7 +854,7 @@ class DuokeBot:
         m = re.search(r"\b([A-Z]{2}\d{8,}[A-Z0-9]{1,})\b", content or "")
         return m.group(1) if m else None
 
-# ---------- modos de execução / helpers ----------
+    # ---------- modos de execução / helpers ----------
 
     @staticmethod
     async def _text_or_empty(locator):
@@ -825,21 +866,31 @@ class DuokeBot:
     @staticmethod
     async def get_order_bits(page):
         """Lê status/desc/track + produto/variação/SKU do painel direito usando SEL."""
-        status_tag = await DuokeBot._text_or_empty(page.locator(SEL["order_status_tag"]))
+        status_tag = await DuokeBot._text_or_empty(
+            page.locator(SEL["order_status_tag"])
+        )
 
         log_status_el = page.locator(SEL["logistics_status"])
         logistics_status = ""
         if await log_status_el.count():
-            logistics_status = (await log_status_el.first().get_attribute("title")) or (await log_status_el.first().inner_text())
+            logistics_status = (await log_status_el.first().get_attribute("title")) or (
+                await log_status_el.first().inner_text()
+            )
             logistics_status = (logistics_status or "").strip()
 
-        latest_desc = await DuokeBot._text_or_empty(page.locator(SEL["latest_logistics_description"]))
+        latest_desc = await DuokeBot._text_or_empty(
+            page.locator(SEL["latest_logistics_description"])
+        )
         tracking = await DuokeBot._text_or_empty(page.locator(SEL["tracking_number"]))
         product = await DuokeBot._text_or_empty(page.locator(SEL["product_title"]))
-        variation = await DuokeBot._text_or_empty(page.locator(SEL["product_variation"]))
+        variation = await DuokeBot._text_or_empty(
+            page.locator(SEL["product_variation"])
+        )
         sku = await DuokeBot._text_or_empty(page.locator(SEL["product_sku"]))
 
-        status_consolidado = (status_tag or logistics_status or latest_desc or "desconhecido")
+        status_consolidado = (
+            status_tag or logistics_status or latest_desc or "desconhecido"
+        )
 
         return {
             "status_tag": status_tag,
@@ -918,7 +969,7 @@ class DuokeBot:
             # ----- Order info + status consolidado -----
             try:
                 order_info = await self.read_sidebar_order_info(page)
-                fields = (order_info.get("fields") or {})
+                fields = order_info.get("fields") or {}
                 status_tag = (order_info.get("status") or "").strip()
 
                 # Logistics Status (ex.: Delivered)
@@ -941,7 +992,9 @@ class DuokeBot:
                         order_info["tracking"] = (v or "").strip()
                         break
 
-                order_info["status_consolidado"] = status_tag or logistics_status or latest_desc or "desconhecido"
+                order_info["status_consolidado"] = (
+                    status_tag or logistics_status or latest_desc or "desconhecido"
+                )
                 order_info["logistics_latest_desc"] = latest_desc
 
                 print("[DEBUG] Order info:", order_info)
@@ -983,7 +1036,9 @@ class DuokeBot:
             buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
 
             # Últimas N do comprador + 2 do vendedor para contexto
-            history_block = self.build_history_from_pairs(pairs, max_buyer=depth, max_seller_tail=2)
+            history_block = self.build_history_from_pairs(
+                pairs, max_buyer=depth, max_seller_tail=2
+            )
             order_info["history_block"] = history_block
 
             # ----- dedupe por conversa e rate-limit -----
@@ -991,7 +1046,9 @@ class DuokeBot:
             now = time.time()
             last = self.last_replied_at.get(conv_key)
             if last and now - last < 180:
-                print(f"[DEBUG] pulando conversa já respondida recentemente: {conv_key}")
+                print(
+                    f"[DEBUG] pulando conversa já respondida recentemente: {conv_key}"
+                )
                 continue
 
             # ----- classificador / decisão -----
@@ -1015,13 +1072,18 @@ class DuokeBot:
             print(f"[DEBUG] decide: should={should} | Resposta: {reply}")
             decision_txt = (reply or "").strip().lower()
             if (not should) or decision_txt == "ação: skip (pular)".lower():
-                await self.apply_label(page, label_name=getattr(settings, "label_on_skip", "gpt"))
+                await self.apply_label(
+                    page, label_name=getattr(settings, "label_on_skip", "gpt")
+                )
                 print("[DEBUG] conversa marcada (skip)")
                 continue
 
             if buyer_only:
                 if buyer_wants_missing_parts(buyer_only[-1]):
-                    await self.apply_label(page, label_name=getattr(settings, "label_on_missing_parts", "gpt"))
+                    await self.apply_label(
+                        page,
+                        label_name=getattr(settings, "label_on_missing_parts", "gpt"),
+                    )
                     print("[DEBUG] conversa marcada (quer peças faltantes)")
 
             if order_info.get("orderId") and "{ORDER_ID}" in reply:
@@ -1029,8 +1091,9 @@ class DuokeBot:
 
             await self.send_reply(page, reply)
             self.last_replied_at[conv_key] = now
-            await page.wait_for_timeout(int(getattr(settings, "delay_between_actions", 1.0) * 1000))
-
+            await page.wait_for_timeout(
+                int(getattr(settings, "delay_between_actions", 1.0) * 1000)
+            )
 
     async def run_once(self, decide_reply_fn):
         """Modo pontual (mantido por compat)."""
