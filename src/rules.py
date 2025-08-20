@@ -94,7 +94,7 @@ def _text_matches(
 
 def apply_rules(messages: List[str]) -> Tuple[bool, Optional[str], Optional[str]]:
     """
-    Aplica regras ao contexto curto (últimas 5 mensagens).
+    Aplica regras ao contexto curto (últimas 10 mensagens).
     Retorna (decide, reply, action):
       - decide=False, reply=None, action='skip'  -> não responder (pular)
       - decide=True,  reply=str,  action='reply' -> responder com 'reply'
@@ -104,7 +104,7 @@ def apply_rules(messages: List[str]) -> Tuple[bool, Optional[str], Optional[str]
     if not messages:
         return False, None, None
 
-    last_user_texts = messages[-5:]  # contexto curto
+    last_user_texts = messages[-10:]  # contexto curto
 
     for rule in rules:
         if not rule.get("active", True):

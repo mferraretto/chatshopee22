@@ -21,7 +21,7 @@ class Settings(BaseModel):
     # --- App / Robô ---
     douke_url: str = Field(default_factory=lambda: os.getenv("DOUKE_URL", "https://web.duoke.com/?lang=en#/dk/main/chat"))
     max_conversations: int = Field(default_factory=lambda: int(os.getenv("MAX_CONVERSATIONS", "50")))
-    history_depth: int = Field(default_factory=lambda: int(os.getenv("HISTORY_DEPTH", "8")))
+    history_depth: int = Field(default_factory=lambda: int(os.getenv("HISTORY_DEPTH", "10")))
     apply_needs_reply_filter: bool = Field(
         default_factory=lambda: os.getenv("APPLY_NEEDS_REPLY_FILTER", "nao").lower() in TRUE_SET
     )
