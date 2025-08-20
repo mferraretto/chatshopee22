@@ -805,18 +805,8 @@ class DuokeBot:
             if not should:
                 continue
 
-            if order_info.get("status"):
-                if "status:" not in reply.lower():
-                    reply += f"\n\n_Status atual do pedido:_ **{order_info['status']}**"
             if order_info.get("orderId") and "{ORDER_ID}" in reply:
                 reply = reply.replace("{ORDER_ID}", order_info["orderId"])
-
-            tracking = await self.maybe_extract_tracking(page)
-            if tracking and "aplicativo da Shopee" in reply:
-                reply = reply.replace(
-                    "aplicativo da Shopee",
-                    f"aplicativo da Shopee (código {tracking})"
-                )
 
             await self.send_reply(page, reply)
             self.last_replied_at[conv_key] = now

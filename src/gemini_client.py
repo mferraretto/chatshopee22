@@ -157,7 +157,8 @@ REGRAS:
 - Não mencione/peça PIX/reembolso se o cliente falou disso.
 - Não altere políticas nem opções (apenas reescreva).
 - Mantenha 1–2 frases, claras e amistosas.
-- Se faltar informação essencial, peça **uma** coisa por vez.
+- Não use placeholders ou variáveis genéricas como "X", "Y" ou similares.
+- Se faltar informação essencial, peça **apenas um** esclarecimento específico e só se for necessário.
 
 ENTRADA:
 - Mensagem do cliente: {{BUYER}}
@@ -181,7 +182,8 @@ CHECKLIST:
 - Não prometa data de entrega.
 - Não fale de PIX/reembolso.
 - Não mude condições/opções originais.
-- Se o MANAGER pediu 1 esclarecimento, mantenha um pedido simples.
+- Sem placeholders genéricos (ex.: "X", "Y").
+- Só peça esclarecimento se indispensável e mantenha no máximo um pedido específico.
 
 ENTRADA:
 - Mensagem do cliente: {{BUYER}}
