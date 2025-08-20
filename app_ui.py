@@ -610,7 +610,7 @@ async def _run_cycle(run_once: bool):
     # Hook para UI ver o que foi lido e a resposta sugerida
     async def hook(pairs, buyer_only, order_info=None) -> tuple[bool, str]:
         ws_broadcast({"snapshot": {"reading": [list(p) for p in pairs], "proposed": "", "running": True}})
-        should, reply = decide_reply(pairs, buyer_only, order_info)
+        should, reply = decide_reply(buyer_only, order_info)
         ws_broadcast({"snapshot": {"reading": [list(p) for p in pairs], "proposed": reply, "running": True}})
         return should, reply
 
