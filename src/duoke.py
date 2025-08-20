@@ -468,7 +468,12 @@ class DuokeBot:
                     const role = cls.includes('lt') ? 'buyer' : (cls.includes('rt') ? 'seller' : 'system');
                     const txtNode = li.querySelector('div.text_cont, .bubble .text, .record_item .content');
                     const txt = (txtNode?.innerText || '').trim();
-                    return txt && role !== 'system' ? [role, txt] : null;
+                    const hasImg = !!li.querySelector('img');
+                    const parts = [];
+                    if (txt) parts.push(txt);
+                    if (hasImg) parts.push('[imagem]');
+                    const content = parts.join(' ').trim();
+                    return content && role !== 'system' ? [role, content] : null;
                 }).filter(Boolean)
             """)
             out = texts[-depth:]

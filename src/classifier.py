@@ -19,7 +19,12 @@ def decide_reply(
     """Decide se deve responder e retorna o rascunho."""
     history_depth = getattr(settings, "history_depth", 15)
     pairs = _pairs or []
+    buyer_sent_photo = any(
+        r == "buyer" and "[imagem]" in m.lower() for r, m in pairs
+    )
     history = "\n".join(f"{r}: {m}" for r, m in pairs[-history_depth:])
+    if buyer_sent_photo:
+        history += "\nsystem: Observação: o comprador já enviou uma foto."
     reply = generate_reply(history)
     if reply.strip():
         return True, reply.strip()
