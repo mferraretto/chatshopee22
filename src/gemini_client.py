@@ -1,12 +1,7 @@
-import json
-import re
-import unicodedata
 import google.generativeai as genai
 from .config import settings
 
-# ---------------------------
-# Gemini client
-# ---------------------------
+
 def get_gemini():
     if not settings.gemini_api_key:
         raise RuntimeError("GEMINI_API_KEY ausente. Configure no .env")
@@ -16,229 +11,141 @@ def get_gemini():
         generation_config={
             "temperature": 0.2,
             "top_p": 0.9,
-            "response_mime_type": "application/json"  # usamos JSON nas duas passadas
-        }
+        },
     )
 
-# ---------------------------
-# Prompt de classificação (igual ao seu, só mantido aqui)
-# ---------------------------
-PROMPT = r"""
-Você é um classificador de mensagens de atendimento Shopee e decide se devemos responder.
-Leia as últimas mensagens (comprador + vendedor). Classifique a INTENÇÃO e diga se devemos responder.
 
-REGRAS DE NÃO-RESPOSTA (pular):
-- Reclamação de PIX/reembolso que “não caiu”, “não recebi”, “comprovante” → pular
-- Cobrança de peça/substituição prometida anteriormente que ainda não enviamos → pular
-
-INTENÇÕES (enum):
-- "quebra"               → dano/defeito/avaria em produto
-- "faltando"             → peça/parafuso faltando
-- "elogio"               → recebido/elogio/agradecimento
-- "envio"                → dúvida logística genérica (prazo médio, rastreio etc.)
-- "embalagem_precompra"  → dúvidas sobre embalagem, “vem bem embalado?”, medo de amassar (pré-venda)
-- "prazo_data"           → quer que chegue até uma data específica (ex.: “chegue até dia 10”)
-- "etiqueta_fragil"      → pedir aviso/etiqueta de FRÁGIL
-- "duvida_produto"       → característica/técnica do item (ex.: “tem furinho?”, material, medidas)
-- "pular"                → casos de NÃO-RESPOSTA acima
-
-EXTRAÇÕES:
-- "tem_foto": true/false (cliente anexou/relatou foto? palavras como “foto”, “imagem”, “segue foto”)
-- "urgencia": true/false (ex.: “urgente”, “preciso para sábado”, “até o dia”, “desesperad”)
-- "pre_venda": true/false (é antes da compra? sinais como “quero comprar”, “pretendo comprar”, sem ‘veio/chegou/recebi’)
-
-Política:
-- Nunca prometa data exata de chegada (quem define é a logística da Shopee).
-- Jamais peça ou prometa nada sobre PIX quando a intenção for “pular”.
-
-SAÍDA OBRIGATÓRIA (JSON apenas):
-{
-  "intent": "<quebra|faltando|elogio|envio|embalagem_precompra|prazo_data|etiqueta_fragil|duvida_produto|pular>",
-  "reason": "<1 frase explicando>",
-  "needs_reply": true/false,
-  "signals": { "tem_foto": bool, "urgencia": bool, "pre_venda": bool }
-}
-"""
-
-# ---------------------------
-# Utils de parsing/matching
-# ---------------------------
-def _strip_code_fences(s: str) -> str:
-    if not s:
-        return s
-    s = s.strip()
-    if s.startswith("```"):
-        s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s, flags=re.IGNORECASE | re.DOTALL).strip()
-    return s
-
-def _first_json_object(s: str) -> str | None:
-    if not s:
-        return None
-    m = re.search(r"\{.*?\}", s, flags=re.DOTALL)
-    return m.group(0) if m else None
-
-def _norm(s: str) -> str:
-    s = unicodedata.normalize("NFD", s)
-    s = s.encode("ascii", "ignore").decode("ascii")
-    return s.lower()
-
-# ---------------------------
-# Classificação (inalterada)
-# ---------------------------
-def classify(messages: list[str]) -> dict:
-    model = get_gemini()
-    history = "\n".join(messages[-8:])
-    try:
-        resp = model.generate_content(f"{PROMPT}\n\nHISTORICO:\n{history}")
-        txt = _strip_code_fences((getattr(resp, "text", None) or "").strip())
-        blob = _first_json_object(txt) or txt
-        data = json.loads(blob)
-        if not isinstance(data, dict):
-            raise ValueError("JSON não é um objeto")
-        return data
-    except Exception:
-        return _fallback_classify(messages)
-
-def _fallback_classify(messages: list[str]) -> dict:
-    raw = " ".join(messages[-8:])
-    t = _norm(raw)
-
-    def has(*keys):
-        return any(k in t for k in keys)
-
-    # pular
-    if has("pix", "comprovante", "nao recebi o pix", "pix nao caiu", "reembolso nao caiu"):
-        return {"intent": "pular", "reason": "pix/reembolso pendente", "needs_reply": False,
-                "signals": {"tem_foto": False, "urgencia": False, "pre_venda": False}}
-    if has("cade a peca", "prometeram enviar", "prometeram a peca", "ficaram de enviar", "nao enviaram ainda"):
-        return {"intent": "pular", "reason": "cobranca de peca prometida", "needs_reply": False,
-                "signals": {"tem_foto": False, "urgencia": False, "pre_venda": False}}
-
-    # novas intenções
-    if has("bem embalado", "embalado", "embalagem", "amassar", "amassado", "avaria") and not has("chegou", "veio", "recebi", "foto"):
-        return {"intent": "embalagem_precompra", "reason": "duvida de embalagem (pre-venda)", "needs_reply": True,
-                "signals": {"tem_foto": False, "urgencia": False, "pre_venda": True}}
-    if has("chegue ate", "chegar ate", "ate o dia", "preciso para", "prazo ate", "aniversario", "final de semana"):
-        return {"intent": "prazo_data", "reason": "data especifica desejada", "needs_reply": True,
-                "signals": {"tem_foto": False, "urgencia": True, "pre_venda": not has("veio", "chegou", "recebi")}}
-    if has("fragil", "etiqueta fragil", "aviso na embalagem"):
-        return {"intent": "etiqueta_fragil", "reason": "pedido de etiqueta FRAGIL", "needs_reply": True,
-                "signals": {"tem_foto": False, "urgencia": False, "pre_venda": not has("veio", "chegou", "recebi")}}
-    if has("furinho", "furo", "furacao", "parafusar", "medida", "tamanho", "material"):
-        return {"intent": "duvida_produto", "reason": "duvida de caracteristica do produto", "needs_reply": True,
-                "signals": {"tem_foto": False, "urgencia": False, "pre_venda": not has("veio", "chegou", "recebi")}}
-
-    # existentes
-    if has("quebrou", "quebrado", "trincado", "amassado", "danificado", "rachado", "defeito", "estragado", "avaria"):
-        return {"intent": "quebra", "reason": "dano/defeito relatado", "needs_reply": True,
-                "signals": {"tem_foto": has("foto", "imagem", "segue foto"), "urgencia": has("urgente", "desesperad"), "pre_venda": False}}
-    if has("faltou", "faltando", "nao veio", "veio faltando", "sem parafuso", "sem peca"):
-        return {"intent": "faltando", "reason": "item faltante", "needs_reply": True,
-                "signals": {"tem_foto": has("foto", "imagem"), "urgencia": has("urgente"), "pre_venda": False}}
-    if has("chegou certinho", "amei", "perfeito", "obrigado", "obrigada", "tudo certo", "deu certo"):
-        return {"intent": "elogio", "reason": "elogio/recebido", "needs_reply": True,
-                "signals": {"tem_foto": False, "urgencia": False, "pre_venda": False}}
-    if has("prazo", "quando chega", "nao chegou", "rastreamento", "rastreio", "codigo", "tracking"):
-        return {"intent": "envio", "reason": "duvida logistica", "needs_reply": True,
-                "signals": {"tem_foto": False, "urgencia": has("urgente"), "pre_venda": not has("veio", "chegou", "recebi")}}
-
-    return {"intent": "envio", "reason": "fallback neutro", "needs_reply": True,
-            "signals": {"tem_foto": False, "urgencia": False, "pre_venda": not has("veio", "chegou", "recebi")}}
-
-# ============================================================
-# Manager + Critic (duas passadas baratas) para refinar resposta
-# ============================================================
-
-_MANAGER_PROMPT = r"""
-Você é o MANAGER de atendimento. Objetivo: gerar um rascunho curto e educado da resposta.
+PROMPT_COMPLETO = """Você e um vendedor empatico e acolhedor. Seu objetivo e analisar as respostas enviadas dos clientes, identificar sua intenção com o contexto de todas mensagens e gerar um rascunho curto e educado da resposta.
 
 REGRAS:
 - Não prometa data exata de entrega.
 - Não mencione/peça PIX/reembolso se o cliente falou disso.
 - Não altere políticas nem opções (apenas reescreva).
 - Mantenha 1–2 frases, claras e amistosas.
-- Não use placeholders ou variáveis genéricas como "X", "Y" ou similares.
 - Se faltar informação essencial, peça **apenas um** esclarecimento específico e só se for necessário.
+sempre que alguma conversa se encaixar em um desses contextos, use essas respostas prontas.
+ID: tempo_envio
 
+Intenções de Correspondência: "quanto tempo", "demora para enviar", "quando envia", "prazo de envio"
+
+Resposta: "Oii, tudo bem? As compras feitas hoje, são enviadas amanhã pela manhã, e chegam em média de 3 a 5 dias úteis."
+
+ID: quebra_sem_foto
+
+Intenções de Correspondência: "quebrado", "rachado", "defeito", "trincado", "danificado"
+
+Exclusões: "foto"
+
+Resposta: "Oii, espero que esteja bem. Sinto muito por isso! Para que eu possa te ajudar da melhor forma e o mais rápido possível, você poderia me enviar uma foto do item? Assim consigo entender melhor o que aconteceu e buscar a melhor solução para você."
+
+ID: quebra_com_foto
+
+Intenções de Correspondência: "quebrado", "foto", "como solicitar", "como faço devolução", "como pedir reembolso", "enviam outro", "enviam outra", "troca urgente", "desesperad"
+
+Resposta: "Olá! Sentimos muito pelo ocorrido. Podemos resolver de 3 formas: \n- Reembolso parcial — você fica com o produto e recebe parte do valor de volta.\n- Devolução pelo app da Shopee — com reembolso total após o retorno.\n- Envio de nova peça — sem custo pela peça, você paga apenas o frete, e não precisa devolver nada.\nMe avisa qual opção prefere que resolvo tudo por aqui!"
+
+ID: reembolso_parcial
+
+Intenções de Correspondência: "reembolso parcial", "parcial"
+
+Resposta: "Olá! Para solicitar o reembolso parcial, siga estes passos:\n1- Acesse Minhas Compras no app da Shopee\n2- Selecione o pedido\n3- Clique em Devolver/Reembolsar\n4- Escolha Reembolso Parcial e adicione fotos e descrição do problema.\nQualquer dúvida, estamos aqui para ajudar!"
+
+ID: nova_peca
+
+Intenções de Correspondência: "nova peça", "enviar outra", "pagar frete", "quanto frete"
+
+Resposta: "Geralmente o frete sai baratinho, e você consegue usar cupom de frete grátis Shopee, caso tenha. Você pode calcular o frete por este anúncio de R$2,00, e pode fazer a compra dele para receber um trio totalmente novo."
+
+ID: devolucao_total
+
+Intenções de Correspondência: "devolução", "reembolso total", "devolver"
+
+Resposta: "As devoluções, trocas e reembolsos são feitos pela Shopee. É preciso devolver todo o kit. Para isso, vá até 'A caminho' em 'Minhas compras' > selecione o pedido > clique em 'Pedido de Reembolso'. Em seguida, selecione o motivo, forneça evidências e descrição (se aplicável) e clique em 'Enviar'."
+
+ID: faltando_peca
+
+Intenções de Correspondência: "faltou", "faltando", "não veio", "nao veio", "veio faltando", "sem peça", "sem parafuso"
+
+Resposta: "Oii, tudo bem? Peço desculpas por isso, posso te enviar a peça que faltou, ou se preferir posso fazer seu reembolso. O que você prefere?"
+
+ID: pedido_cancelado
+
+Intenções de Correspondência: "pedido cancelado", "foi cancelado", "cancelaram"
+
+Resposta: "Olá! Sinto muito pelo problema na entrega, sei como isso pode ser frustrante. A Shopee Express é responsável por todo o processo, e infelizmente não temos controle sobre o ocorrido. Esses erros também nos prejudicam. Mas não se preocupe! Você pode entrar em contato com o suporte da Shopee pelo app, na seção 'Ajuda'. Enquanto isso, para compensar o transtorno, posso te oferecer um cupom de desconto caso ainda tenha interesse na peça. O que acha?"
+
+ID: pedido_parado
+
+Intenções de Correspondência: "pedido parado", "não anda", "não atualiza", "sem movimentação", "ta parado"
+
+Resposta: "Sinto muito pelo problema com a entrega, entendo o quanto isso pode ser frustrante. Infelizmente, como a Shopee é responsável pelo envio, não tenho controle direto sobre a situação, mas estou aqui para ajudar no que for possível!\n\nJá abri um chamado reforçando a urgência do seu caso. Além disso, você pode entrar em contato diretamente com o suporte da Shopee pelo app, na seção 'Ajuda'."
+
+ID: cilindro_pequeno
+
+Intenções de Correspondência: "cilindro pequeno", "cilindro não é grande", "cilindro errado"
+
+Resposta: "Boa tarde! Tudo bem? Poxa, sinto muito pela confusão. Esse anúncio é referente ao trio compacto (3 peças menores), como mostramos na descrição e nas imagens com as medidas. Para alcançar o tamanho padrão, muitos clientes usam 2 trios compactos. Se quiser completar, posso te oferecer 25% de desconto no segundo trio!"
+
+ID: pix_pendente
+
+Intenções de Correspondência: "pix", "comprovante", "reembolso nao caiu", "não recebi o pix", "não caiu"
+
+Ação: "skip" (pular)
+
+ID: fallback
+
+Intenções de Correspondência: (nenhuma, serve como resposta padrão)
+
+Resposta: "Desculpe, não entendi muito bem sua mensagem. Você poderia explicar um pouco melhor para que eu consiga te ajudar?"
+
+ID: embalagem_segura_precompra
+
+Intenções de Correspondência: "embalado", "embalagem", "amassar", "amassado", "amassam", "avaria", "frágil", "fragil", "quebrar no envio", "bem embalado"
+
+Exclusões: "recebi", "chegou", "veio", "foto", "reembolso", "devolver", "devolução"
+
+Resposta: "Oii! A gente capricha bastante na embalagem: usamos proteção interna e caixa reforçada para evitar amassar/avarias no transporte. Se acontecer qualquer imprevisto, te ajudamos com a solução pelo app da Shopee (reembolso, troca ou reposição). Pode comprar tranquilo(a) 🙂"
+
+ID: prazo_entrega_data_especifica
+
+Intenções de Correspondência: "chegue até", "chegar até", "até o dia", "preciso para", "prazo até", "aniversário", "urgente", "final de semana", "data específica"
+
+Exclusões: "recebi", "veio", "chegou"
+
+Resposta: "Oii! Enviamos no próximo dia útil e o prazo médio é de 3 a 5 dias úteis após a postagem. Por ser logística da Shopee, não consigo prometer uma data exata, mas recomendo finalizar hoje e escolher o frete mais rápido disponível. Assim que postar, te mando o rastreio e acompanho de perto para te ajudar. Pode ser?"
+
+ID: saudacao_expectativa_positiva
+
+Intenções de Correspondência: "ansioso", "espero que venha perfeito", "venha perfeito", "ansiosa", "tomara que venha", "chegue certinho"
+
+Resposta: "Boa noite! Obrigado pela confiança 🙏 Caprichamos na embalagem (proteção interna + caixa reforçada) e conferimos cada peça antes do envio. Assim que postar, te envio o rastreio. Qualquer coisa, estou aqui! 😊"
+
+ID: solicita_etiqueta_fragil
+
+Intenções de Correspondência: "frágil", "fragil", "aviso na embalagem", "etiqueta frágil", "danos no transporte", "cuidar no transporte"
+
+Resposta: "Claro! Colocamos etiqueta FRÁGIL na caixa e reforçamos a proteção interna. A entrega é feita pela Shopee, mas essa sinalização ajuda bastante no manuseio. Pode deixar que já vou marcar aqui 😉"
+
+ID: duvida_caracteristica_produto
+
+Intenções de Correspondência: "furinho", "furo", "tem furo", "furação", "parafusar", "medida", "tamanho", "material"
+
+Resposta: "Ótima pergunta! Alguns modelos já vão com furo, outros podem ser personalizados. Me diz qual modelo/variação você quer e eu te confirmo agora. Se preferir, vejo a opção com/sem furo para você 😉"
 ENTRADA:
 - Mensagem do cliente: {{BUYER}}
-- Resposta sugerida (não precisa copiar literalmente): {{DRAFT}}
+- Resposta sugerida (não precisa copiar literalmente): {{DRAFT}}"""
 
-SAÍDA OBRIGATÓRIA EM JSON:
-{
-  "draft": "<texto curto e educado>",
-  "signals": {
-    "asked_clarification": true/false
-  }
-}
-"""
 
-_CRITIC_PROMPT = r"""
-Você é o CRITIC. Revise o texto final com este checklist:
-
-CHECKLIST:
-- Curto (máx. ~2 frases).
-- Tom cordial e claro, sem jargão.
-- Não prometa data de entrega.
-- Não fale de PIX/reembolso.
-- Não mude condições/opções originais.
-- Sem placeholders genéricos (ex.: "X", "Y").
-- Só peça esclarecimento se indispensável e mantenha no máximo um pedido específico.
-
-ENTRADA:
-- Mensagem do cliente: {{BUYER}}
-- Texto do MANAGER: {{MANAGER_DRAFT}}
-
-SAÍDA OBRIGATÓRIA EM JSON:
-{ "final": "<texto pronto para enviar>" }
-"""
-
-def _gen_json(model, prompt: str) -> dict:
-    """Chama o modelo, limpa cercas e retorna dict JSON (ou lança)."""
-    resp = model.generate_content(prompt)
-    raw = _strip_code_fences((getattr(resp, "text", None) or "").strip())
-    blob = _first_json_object(raw) or raw
-    return json.loads(blob)
-
-def refine_reply(reply: str, buyer_text: str = "") -> str:
-    """
-    Pipeline manager -> critic:
-      1) Manager cria rascunho curto e educado.
-      2) Critic aplica checklist e retorna o texto final.
-    """
+def generate_reply(history: str) -> str:
+    """Gera resposta direta com base nas últimas mensagens."""
     if not settings.gemini_api_key:
-        return reply
+        return ""
     try:
         model = get_gemini()
-
-        # 1) Manager
-        mgr_prompt = (
-            _MANAGER_PROMPT
-            .replace("{{BUYER}}", buyer_text or "")
-            .replace("{{DRAFT}}", reply or "")
+        prompt = (
+            PROMPT_COMPLETO.replace("{{BUYER}}", history or "").replace("{{DRAFT}}", "")
         )
-        try:
-            mgr_data = _gen_json(model, mgr_prompt)
-            manager_draft = (mgr_data.get("draft") or "").strip()
-        except Exception:
-            manager_draft = reply  # fallback: usa resposta original
-
-        if not manager_draft:
-            manager_draft = reply
-
-        # 2) Critic
-        critic_prompt = (
-            _CRITIC_PROMPT
-            .replace("{{BUYER}}", buyer_text or "")
-            .replace("{{MANAGER_DRAFT}}", manager_draft)
-        )
-        try:
-            crt_data = _gen_json(model, critic_prompt)
-            final_txt = (crt_data.get("final") or "").strip()
-            return final_txt or manager_draft or reply
-        except Exception:
-            return manager_draft or reply
-
+        resp = model.generate_content(prompt)
+        return (getattr(resp, "text", "") or "").strip()
     except Exception:
-        return reply
-
+        return ""
