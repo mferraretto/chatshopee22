@@ -15,11 +15,7 @@ from playwright.async_api import (
 )
 from .config import settings
 from .classifier import RESP_FALLBACK_CURTO
-from .cases import (
-    append_row as log_case,
-    save_conversation_snapshot,
-    mark_conversation_skipped,
-)
+from .cases import append_row as log_case
 
 # Carrega seletores configuráveis
 SEL = json.loads(
@@ -51,203 +47,6 @@ def buyer_wants_missing_parts(text: str) -> bool:
         "prefiro receber a peça",
     ]
     return any(s in t for s in simples)
-
-
-NOISE_SUBSTRINGS = (
-    "FAQ History",
-    "[The referenced message cannot be found]",
-)
-
-
-def _clean(t: str) -> str:
-    t = (t or "").replace("\u200b", "").strip()
-    return re.sub(r"\s+", " ", t)
-
-
-def _parse_money_br(txt: str) -> float:
-    txt = _clean(txt)
-    if not txt:
-        return 0.0
-    num = re.sub(r"[^0-9,]", "", txt)
-    num = num.replace(".", "").replace(",", ".")
-    try:
-        return float(num)
-    except ValueError:
-        return 0.0
-
-
-def _parse_qty(txt: str) -> int:
-    txt = _clean(txt)
-    m = re.search(r"(\d+)", txt)
-    return int(m.group(1)) if m else 0
-
-
-async def get_last_buyer_texts(page, limit=20) -> list[str]:
-    await page.wait_for_selector(SEL["messages_container"], timeout=15000)
-
-    try:
-        await page.eval_on_selector_all(
-            SEL["buyer_badge_noise"], "nodes => nodes.forEach(n => n.remove())"
-        )
-    except Exception:
-        pass
-    try:
-        await page.eval_on_selector_all(
-            SEL["quote_blocks"], "nodes => nodes.forEach(n => n.remove())"
-        )
-    except Exception:
-        pass
-
-    texts = await page.eval_on_selector_all(
-        SEL["buyer_bubbles"],
-        "nodes => nodes.map(n => n.textContent || '').filter(Boolean)",
-    )
-
-    if len(texts) < 5:
-        await page.mouse.wheel(0, -1500)
-        await page.wait_for_timeout(600)
-        texts = await page.eval_on_selector_all(
-            SEL["buyer_bubbles"],
-            "nodes => nodes.map(n => n.textContent || '').filter(Boolean)",
-        )
-
-    if not texts:
-        texts = await page.eval_on_selector_all(
-            SEL["buyer_bubbles_fallback"],
-            "nodes => nodes.map(n => n.textContent || '').filter(Boolean)",
-        )
-
-    cleaned = []
-    for raw in texts:
-        t = _clean(raw)
-        if not t:
-            continue
-        if any(x.lower() in t.lower() for x in NOISE_SUBSTRINGS):
-            continue
-        cleaned.append(t)
-
-    return cleaned[-limit:]
-
-
-async def get_last_seller_texts(page, limit=30) -> list[str]:
-    await page.wait_for_selector(SEL["messages_container"], timeout=15000)
-
-    try:
-        await page.eval_on_selector_all(
-            SEL["quote_blocks"], "nodes => nodes.forEach(n => n.remove())"
-        )
-    except Exception:
-        pass
-
-    texts = await page.eval_on_selector_all(
-        SEL["seller_bubbles"],
-        "nodes => nodes.map(n => n.textContent || '').filter(Boolean)",
-    )
-    if not texts:
-        texts = await page.eval_on_selector_all(
-            SEL["seller_bubbles_fallback"],
-            "nodes => nodes.map(n => n.textContent || '').filter(Boolean)",
-        )
-
-    cleaned = []
-    for raw in texts:
-        t = _clean(raw)
-        if not t:
-            continue
-        if any(x.lower() in t.lower() for x in NOISE_SUBSTRINGS):
-            continue
-        cleaned.append(t)
-
-    return cleaned[-limit:]
-
-
-OFFER_PATTERNS = [
-    r"\b(reembols\w+|reembolso|estorno)\b",
-    r"\b(troca(r|remos)?|efetuar\s+troca|fazer\s+a\s+troca)\b",
-    r"\b(enviar(\s+a)?\s*(peça|peca)\s*(faltante|que faltou)?)\b",
-    r"\b(reenviar|reenvio)\b",
-    r"\b(devolver|devolu(c|ç)ão)\b",
-]
-OFFER_RE = re.compile("|".join(OFFER_PATTERNS), re.I)
-
-
-def seller_offered_resolution(msgs: list[str]) -> bool:
-    if not msgs:
-        return False
-    joined = " \n ".join(msgs)
-    return bool(OFFER_RE.search(joined))
-
-
-STATUS_RANK = {
-    "cancelled": 100,
-    "completed": 90,
-    "ready to ship": 60,
-    "to ship": 50,
-    "to pack": 40,
-    "to pay": 10,
-}
-
-
-def _norm_status(s: str) -> str:
-    s = (s or "").lower()
-    if "cancel" in s:
-        return "cancelled"
-    if "complete" in s or "deliver" in s:
-        return "completed"
-    if "ready to ship" in s:
-        return "ready to ship"
-    if "to ship" in s:
-        return "to ship"
-    if "to pack" in s:
-        return "to pack"
-    if "to pay" in s:
-        return "to pay"
-    return "unknown"
-
-
-async def get_status_consolidated(page) -> str:
-    badges = await page.eval_on_selector_all(
-        SEL["status_badge"],
-        "nodes => nodes.map(n => (n.textContent || '').trim()).filter(Boolean)",
-    )
-    mapped = [_norm_status(x) for x in badges]
-    return max(mapped, key=lambda x: STATUS_RANK.get(x, 0)) if mapped else "unknown"
-
-
-async def get_order_items(page) -> list[dict]:
-    await page.wait_for_selector(SEL["order_items_root"], timeout=15000)
-    items = []
-    for h in await page.query_selector_all(SEL["order_item"]):
-        title = await h.eval_on_selector(
-            SEL["item_title"],
-            "el => el.textContent || ''",
-        )
-        variation = await h.eval_on_selector(
-            SEL["item_variation"],
-            "el => el.getAttribute('title') || el.textContent || ''",
-        )
-        sku = await h.eval_on_selector(
-            SEL["item_sku"],
-            "el => el.getAttribute('title') || el.textContent || ''",
-        )
-        price_txt = await h.eval_on_selector(
-            SEL["item_price_block"],
-            "el => el.textContent || ''",
-        )
-        qty_txt = await h.eval_on_selector(
-            SEL["item_qty_block"],
-            "el => el.textContent || ''",
-        )
-        items.append(
-            {
-                "title": _clean(title),
-                "variation": _clean(variation),
-                "sku": _clean(sku),
-                "price": _parse_money_br(price_txt),
-                "qty": _parse_qty(qty_txt),
-            }
-        )
-    return items
 
 
 # Botões de confirmação comuns em modais (várias línguas)
@@ -669,8 +468,8 @@ class DuokeBot:
 
         # Aguarda painel renderizar
         try:
-            if SEL.get("messages_container"):
-                await page.wait_for_selector(SEL["messages_container"], timeout=9000)
+            if SEL.get("message_container"):
+                await page.wait_for_selector(SEL["message_container"], timeout=9000)
             await page.wait_for_function(
                 """() => {
                     const ul = document.querySelector('ul.message_main');
@@ -703,7 +502,7 @@ class DuokeBot:
             # Força mais histórico: rola ao topo algumas vezes
             try:
                 container = page.locator(
-                    SEL.get("messages_container", "ul.message_main")
+                    SEL.get("message_container", "ul.message_main")
                 ).first
                 for _ in range(3):
                     await container.evaluate("(el) => { el.scrollTop = 0; }")
@@ -729,12 +528,29 @@ class DuokeBot:
 
     async def read_messages(self, page, depth: int = 8) -> list[str]:
         """Compat: apenas textos do comprador."""
-        try:
-            msgs = await get_last_buyer_texts(page, limit=depth)
-            print(f"[DEBUG] Mensagens do cliente encontradas: {len(msgs)}")
+        msgs: list[str] = []
+        container = page.locator(SEL.get("message_container", "ul.message_main")).first
+        if not await container.count():
+            print("[DEBUG] Nenhum container de mensagens encontrado")
             return msgs
+
+        for _ in range(3):
+            try:
+                await container.evaluate("(el) => { el.scrollTop = 0; }")
+                await page.wait_for_timeout(60)
+            except Exception:
+                break
+
+        buyer_sel = SEL.get("buyer_message", "ul.message_main li.lt .text_cont")
+        try:
+            nodes = page.locator(buyer_sel)
+            msgs = await nodes.evaluate_all(
+                "(els) => els.map(el => (el.innerText || '').trim()).filter(Boolean)"
+            )
+            print(f"[DEBUG] Mensagens do cliente encontradas: {len(msgs)}")
+            return msgs[-depth:]
         except Exception as e:
-            print(f"[DEBUG] erro ao extrair mensagens: {e}")
+            print(f"[DEBUG] erro ao extrair mensagens com evaluate_all: {e}")
             return []
 
     # ---------- painel lateral (pedido) ----------
@@ -1187,39 +1003,12 @@ class DuokeBot:
                 )
                 order_info["logistics_latest_desc"] = latest_desc
 
-                try:
-                    order_info["status_consolidado"] = await get_status_consolidated(page)
-                except Exception:
-                    pass
-                try:
-                    order_info["items"] = await get_order_items(page)
-                except Exception:
-                    pass
-
                 print("[DEBUG] Order info:", order_info)
             except Exception as e:
                 order_info = {}
                 print(f"[DEBUG] falha ao ler order_info: {e}")
 
             # ----- Mensagens + history -----
-            buyer_msgs = await get_last_buyer_texts(page, limit=20)
-            seller_msgs = await get_last_seller_texts(page, limit=30)
-            offered = seller_offered_resolution(seller_msgs)
-            save_conversation_snapshot(
-                {
-                    "order_id": order_info.get("orderId"),
-                    "buyer_last_20": buyer_msgs,
-                    "seller_last_30": seller_msgs,
-                    "offered_resolution": offered,
-                }
-            )
-            if offered:
-                mark_conversation_skipped(
-                    order_info.get("orderId"),
-                    reason="prior_offer_exchange_or_refund",
-                )
-                continue
-
             depth = int(getattr(settings, "history_depth", 8) or 8)
             pairs = await self.read_messages_with_roles(page, depth * 2)
             print(f"[DEBUG] conversa {i}: {len(pairs)} msgs (com role)")
