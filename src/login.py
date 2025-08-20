@@ -10,6 +10,7 @@ from .duoke import DuokeBot
 PROFILE_DIR = Path(__file__).resolve().parents[1] / "pw-user-data"
 STATE_FILE = Path(__file__).resolve().parents[1] / "storage_state.json"
 
+
 async def main():
     PROFILE_DIR.mkdir(exist_ok=True)
     async with async_playwright() as p:
@@ -26,11 +27,14 @@ async def main():
         except Exception:
             pass
         print(">>> Faça login no Douke no navegador aberto.")
-        input(">>> Quando terminar o login e enxergar suas conversas, pressione Enter aqui... ")
+        input(
+            ">>> Quando terminar o login e enxergar suas conversas, pressione Enter aqui... "
+        )
         # Exporta a sessão para storage_state.json (vamos usar isso nos runs)
         await ctx.storage_state(path=str(STATE_FILE))
         print(f">>> Sessão salva em: {STATE_FILE}")
         await ctx.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -8,6 +8,7 @@ from .classifier import decide_reply
 DEFAULT_INTERVAL = float(os.getenv("LOOP_INTERVAL_SECONDS", "5"))
 STATE_FILE = Path(__file__).resolve().parents[1] / "storage_state.json"
 
+
 async def run_forever(interval: float = DEFAULT_INTERVAL) -> None:
     """
     Executa ciclos do bot indefinidamente.
@@ -38,11 +39,15 @@ async def run_forever(interval: float = DEFAULT_INTERVAL) -> None:
             await asyncio.sleep(wait)
             backoff = min(wait * 2, 60.0)
 
+
 async def main() -> None:
     if not STATE_FILE.exists():
-        print("[LOOP] Sessão não encontrada. Execute `python -m src.login` para fazer login antes de iniciar o bot.")
+        print(
+            "[LOOP] Sessão não encontrada. Execute `python -m src.login` para fazer login antes de iniciar o bot."
+        )
         return
     await run_forever()
+
 
 if __name__ == "__main__":
     try:
@@ -50,5 +55,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         # segurança extra caso o KeyboardInterrupt não seja pego dentro do loop
         print("\n[MAIN] Encerrado pelo usuário.")
-
-

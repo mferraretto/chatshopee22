@@ -125,26 +125,48 @@ def _order_stage_context(order_info: dict | None) -> str:
             "completed_time:\n"
         )
 
-    st_raw = (order_info.get("status") or order_info.get("status_consolidado") or "").strip()
+    st_raw = (
+        order_info.get("status") or order_info.get("status_consolidado") or ""
+    ).strip()
     st = st_raw.lower()
 
     fields = order_info.get("fields") or {}
     order_id = order_info.get("orderId") or ""
 
     payment_time = fields.get("Payment Time", "") or fields.get("Hora do pagamento", "")
-    completed_time = fields.get("Completed Time", "") or fields.get("Hora de conclusão", "")
-    logistics_status = fields.get("Logistics Status", "") or fields.get("Status logístico", "")
-    latest_desc = order_info.get("logistics_latest_desc", "") or fields.get("Latest Logistics Description", "")
+    completed_time = fields.get("Completed Time", "") or fields.get(
+        "Hora de conclusão", ""
+    )
+    logistics_status = fields.get("Logistics Status", "") or fields.get(
+        "Status logístico", ""
+    )
+    latest_desc = order_info.get("logistics_latest_desc", "") or fields.get(
+        "Latest Logistics Description", ""
+    )
 
     # Heurística de estágio
-    shipped_tokens = ("shipped", "enviado", "a caminho", "in transit", "out for delivery", "despachado")
+    shipped_tokens = (
+        "shipped",
+        "enviado",
+        "a caminho",
+        "in transit",
+        "out for delivery",
+        "despachado",
+    )
     delivered_tokens = ("delivered", "entregue", "completed", "finalizado", "concluído")
 
     if completed_time or any(tok in st for tok in delivered_tokens):
         fase = "entregue"
-    elif any(tok in st for tok in shipped_tokens) or "pedido entregue" in latest_desc.lower():
+    elif (
+        any(tok in st for tok in shipped_tokens)
+        or "pedido entregue" in latest_desc.lower()
+    ):
         fase = "enviado"
-    elif order_id or payment_time or any(tok in st for tok in ("to ship", "ready to ship")):
+    elif (
+        order_id
+        or payment_time
+        or any(tok in st for tok in ("to ship", "ready to ship"))
+    ):
         fase = "pos_venda"
     else:
         fase = "pre_venda"
@@ -187,7 +209,9 @@ INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
         text = (getattr(resp, "text", "") or "").strip()
 
         # Higienização: remover aspas externas e evitar "Ação:" indevida
-        if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
+        if (text.startswith('"') and text.endswith('"')) or (
+            text.startswith("'") and text.endswith("'")
+        ):
             text = text[1:-1].strip()
 
         low = text.lower()

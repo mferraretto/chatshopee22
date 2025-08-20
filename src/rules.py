@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Optional, Tuple, List, Dict
 
 # Caminho do rules.json na raiz do projeto
-RULES_PATH = (Path(__file__).resolve().parents[1] / "rules.json")
+RULES_PATH = Path(__file__).resolve().parents[1] / "rules.json"
+
 
 def _ensure_rules_file_exists() -> None:
     """Cria um rules.json básico se não existir."""
@@ -18,6 +19,7 @@ def _ensure_rules_file_exists() -> None:
         encoding="utf-8",
     )
 
+
 def load_rules() -> List[Dict]:
     """
     Lê e retorna a lista de regras (campo 'rules') do rules.json.
@@ -27,7 +29,11 @@ def load_rules() -> List[Dict]:
     try:
         data = json.loads(RULES_PATH.read_text(encoding="utf-8"))
         # Aceita tanto {"rules":[...]} quanto uma lista direta [...]
-        if isinstance(data, dict) and "rules" in data and isinstance(data["rules"], list):
+        if (
+            isinstance(data, dict)
+            and "rules" in data
+            and isinstance(data["rules"], list)
+        ):
             return data["rules"]
         if isinstance(data, list):
             return data
@@ -36,6 +42,7 @@ def load_rules() -> List[Dict]:
         # Log simples; você pode trocar por logging se preferir
         print(f"[rules] Aviso: falha ao carregar {RULES_PATH.name}: {e}")
         return []
+
 
 def save_rules(rules: List[Dict]) -> None:
     """
@@ -60,6 +67,7 @@ def get_reply_by_id(rule_id: str) -> Optional[str]:
                 return reply
             return None
     return None
+
 
 def _text_matches(
     texts: List[str],
@@ -91,6 +99,7 @@ def _text_matches(
             return False
 
     return True
+
 
 def apply_rules(messages: List[str]) -> Tuple[bool, Optional[str], Optional[str]]:
     """
@@ -132,4 +141,3 @@ def apply_rules(messages: List[str]) -> Tuple[bool, Optional[str], Optional[str]
 
     # Nenhuma regra casou
     return False, None, None
-
