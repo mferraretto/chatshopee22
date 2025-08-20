@@ -30,6 +30,9 @@ class Settings(BaseModel):
     delay_between_actions: float = Field(default_factory=lambda: float(os.getenv("DELAY_BETWEEN_ACTIONS", "0.1")))
     goto_timeout_ms: int = Field(default_factory=lambda: int(os.getenv("GOTO_TIMEOUT_MS", "60000")))
 
+    label_on_skip: str = Field(default_factory=lambda: os.getenv("LABEL_ON_SKIP", "gpt"))
+    label_on_missing_parts: str = Field(default_factory=lambda: os.getenv("LABEL_ON_MISSING_PARTS", "gpt"))
+
     # --- Cloud Run / Servidor ---
     port: int = Field(default_factory=lambda: int(os.getenv("PORT", "8080")))
     host: str = Field(default_factory=lambda: os.getenv("HOST", "0.0.0.0"))
