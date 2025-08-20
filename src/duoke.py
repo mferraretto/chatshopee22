@@ -660,23 +660,18 @@ class DuokeBot:
             await modal.wait_for(state="visible", timeout=5000)
 
             # 3) Selecionar etiqueta pelo texto
-            item_sel = SEL.get("tag_item", ".label_item .label_item_name, .label_item, span.label_item_name")
-            # tenta match exato (insensível a caixa)
-            items = modal.locator(item_sel)
-            count = await items.count()
-            target = None
-            for idx in range(count):
-                el = items.nth(idx)
-                txt = (await el.inner_text() or "").strip().lower()
-                if txt == (label_name or "").strip().lower():
-                    target = el
-                    break
-            if not target:
-                # fallback: contém texto
-                target = modal.locator(f'{item_sel}:has-text("{label_name}")').first
+            # seleciona o elemento .label_item que contém o texto da etiqueta
+            target = modal.locator(
+                f".label_item:has(.label_item_name:has-text('{label_name}'))"
+            ).first
 
             await target.scroll_into_view_if_needed()
             await target.click()
+
+            # aguarda a etiqueta ficar ativa antes de confirmar
+            await modal.locator(
+                f".label_item.active:has(.label_item_name:has-text('{label_name}'))"
+            ).wait_for(state="visible", timeout=3000)
 
             # 4) Confirmar e aguardar fechar
             confirm_sel = SEL.get("tag_confirm", ".el-dialog__footer .el-button--primary")
