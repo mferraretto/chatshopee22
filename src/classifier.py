@@ -17,14 +17,32 @@ except Exception:
     CATALOG = []
 
 # -------------------- regex intents --------------------
-ASK_HUMAN = re.compile(r"\b(rob[oô]|humano|pessoa|atendente|quero falar|rob[oô] n[aã]o)\b", re.I)
-MISSING = re.compile(r"\b(parafus|ferragem|peç[ao]s?\s*falt|n[aã]o\s+veio|faltando|sem\s+parafuso)\b", re.I)
-ASSEMBLY = re.compile(r"\b(montar|montagem|manual|instala[cç][aã]o|passo\s*a\s*passo)\b", re.I)
-DEADLINE = re.compile(r"\b(chega|entrega|consigue?m? enviar|d[aí]a\s+\d{1,2}|at[eé]\s+dia)\b", re.I)
-PRESALE_ONE = re.compile(r"\b(pe[çc]a\s*[úu]nica|vem\s+em\s+uma\s+pe[çc]a|emendas?|em partes?)\b", re.I)
-CUSTOM_GOLD = re.compile(r"\b(dourad[ao]|pintad[ao]\s+de\s+dourado|letras\s+douradas?)\b", re.I)
+# OBS: o texto é normalizado SEM acentos; evite 'ç' e acentos nos padrões.
+ASK_HUMAN = re.compile(r"\b(robo|humano|pessoa|atendente|quero falar|robo nao)\b", re.I)
+
+MISSING = re.compile(
+    r"\b(parafus|ferragem|pecas?\s*falt|nao\s+veio|faltando|sem\s+parafuso)\b", re.I
+)
+
+ASSEMBLY = re.compile(
+    r"\b(montar|montagem|manual|instalacao|passo\s*a\s*passo)\b", re.I
+)
+
+DEADLINE = re.compile(
+    r"\b(chega|entrega|consegue(?:m)?|consigam|enviar|ate\s+dia\s*\d{1,2}|ate\s+o\s+dia\s*\d{1,2})\b",
+    re.I,
+)
+
+PRESALE_ONE = re.compile(
+    r"\b(peca\s*unica|vem\s+em\s+uma\s+peca|emendas?|em\s+partes?)\b", re.I
+)
+
+CUSTOM_GOLD = re.compile(
+    r"\b(dourado|pintado\s+de\s+dourado|letras?\s+douradas?)\b", re.I
+)
+
 STATUS_RE = re.compile(
-    r"(rastre|entrega|cheg|postado|andamento|onde est[aá]|tracking|c[oó]digo|prazo de envio)",
+    r"(status|rastre|entrega|cheg|postado|andamento|onde\s+esta|tracking|codigo|prazo\s+de\s+envio)",
     re.I,
 )
 
@@ -38,7 +56,7 @@ RESP_PARAFUSOS = (
     "Sinto muito pelo transtorno! 🙏 Vou resolver pessoalmente.\n"
     "Envio hoje um kit de parafusos completo do seu modelo **sem custo** e já mando o manual (PDF + vídeo).\n"
     "Se preferir, posso fazer **reembolso parcial** ou **devolução com reembolso total** — você escolhe.\n"
-    "Confirma o endereço para envio? _Pedido:_ **{ORDER_ID}**."
+    "Confirma o endereço para envio? _Pedido:_ **{order_id}**."
 )
 
 RESP_PRAZO = (
@@ -110,19 +128,23 @@ def decide_reply(
 
     if ASK_HUMAN.search(norm_text):
         reply = RESP_HUMANO
+
     elif MISSING.search(norm_text) or ASSEMBLY.search(norm_text):
         reply = RESP_PARAFUSOS.format(order_id=order_id or "{ORDER_ID}")
+
     elif DEADLINE.search(norm_text):
         prod = match_catalog(order_info)
         reply = RESP_PRAZO.format(**prod_defaults(prod))
+
     elif PRESALE_ONE.search(norm_text):
         prod = match_catalog(order_info)
         reply = RESP_PECA_UNICA.format(**prod_defaults(prod))
+
     elif CUSTOM_GOLD.search(norm_text):
         reply = RESP_DOURADO
+
     elif STATUS_RE.search(norm_text) and order_info.get("status"):
         reply = RESP_STATUS.format(status=order_info["status"])
 
     refined = refine_reply(reply, norm_text)
     return True, refined
-
