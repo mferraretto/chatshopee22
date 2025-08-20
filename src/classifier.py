@@ -9,6 +9,7 @@ from typing import List, Tuple
 
 from .gemini_client import refine_reply, classify
 from .rules import get_reply_by_id
+from .config import settings
 
 CATALOG_PATH = Path(__file__).resolve().parents[1] / "config" / "catalog_rules.json"
 
@@ -48,6 +49,13 @@ STATUS_RE = re.compile(
 )
 
 NOT_CHECKED_RE = re.compile(r"\b(ainda\s+)?nao\s+(verifiquei|conferi|olhei)\b", re.I)
+
+REFUND_PARTIAL_RE = re.compile(r"\breembolso\s+parcial\b", re.I)
+BROKEN_RE = re.compile(
+    r"\b(quebrad[oa]?|quebrou|quebra|rachad[oa]?|trincad[oa]?|danificad[oa]?|defeit[oa]?)\b",
+    re.I,
+)
+PHOTO_RE = re.compile(r"\bfoto(s)?\b", re.I)
 
 # -------------------- respostas --------------------
 RESP_HUMANO = (
@@ -127,7 +135,8 @@ def decide_reply(
     4. O resultado passa por ``refine_reply`` para polir o tom.
     """
     order_info = order_info or {}
-    text = " | ".join(buyer_only[-3:])
+    history_depth = getattr(settings, "history_depth", 8)
+    text = " | ".join(buyer_only[-history_depth:])
     norm_text = _normalize(text)
     order_id = order_info.get("orderId", "")
     cls = classify(buyer_only)
@@ -141,6 +150,12 @@ def decide_reply(
         rule_id = "quebra_com_foto" if signals.get("tem_foto") else "quebra_sem_foto"
 
     base = get_reply_by_id(rule_id) if rule_id else None
+    if not base:
+        if REFUND_PARTIAL_RE.search(norm_text):
+            base = get_reply_by_id("reembolso_parcial")
+        elif BROKEN_RE.search(norm_text):
+            q_id = "quebra_com_foto" if signals.get("tem_foto") or PHOTO_RE.search(norm_text) else "quebra_sem_foto"
+            base = get_reply_by_id(q_id)
     if base:
         refined = refine_reply(base, norm_text)
         return True, refined
