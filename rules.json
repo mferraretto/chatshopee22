@@ -109,5 +109,11 @@
   "match": { "any_contains": ["furinho", "furo", "tem furo", "furação", "parafusar", "medida", "tamanho", "material"] },
   "reply": "Ótima pergunta! Alguns modelos já vão com furo, outros podem ser personalizados. Me diz qual modelo/variação você quer e eu te confirmo agora. Se preferir, vejo a opção com/sem furo para você 😉"
 }
+,
+  {
+  "id": "manual_montagem",
+  "active": true,
+  "match": { "any_contains": ["video montagem", "vídeo montagem", "manual montagem", "como monta", "como montar", "montagem do arco", "tem o manual", "instruções de montagem"] },
+  "reply": "O arco redondo é montado com 6 partes curvadas, 4 travas, 2 pés e 12 parafusos. Aqui está o manual em vídeo: https://youtu.be/BHirxN8hsL4\\n\\nJá o arco romano é montado com 4 partes retas (sendo 2 com rasgo na ponta), 2 partes curvadas, 2 pés arredondados, 5 travas e 10 parafusos. Manual em vídeo: https://www.youtube.com/watch?v=D-lNjLbDEmg"
+}
 ]
-
