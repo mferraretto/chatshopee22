@@ -18,6 +18,29 @@ SEL = json.loads(
     .read_text(encoding="utf-8")
 )
 
+WANTS_PARTS_RE = re.compile(
+    r"(quero|prefiro|pode|manda|mandar|envia|enviar|me envia|me mandar).{0,25}(peça|peças|pecas|as peças|as pecas|a peça|a peca)",
+    re.I,
+)
+
+def buyer_wants_missing_parts(text: str) -> bool:
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+    if WANTS_PARTS_RE.search(t):
+        return True
+    simples = [
+        "quero as peças",
+        "pode enviar as peças",
+        "prefiro as peças",
+        "pode mandar as peças",
+        "quero receber a peça",
+        "manda a peça",
+        "envia as peças",
+        "prefiro receber a peça",
+    ]
+    return any(s in t for s in simples)
+
 # Botões de confirmação comuns em modais (várias línguas)
 CONFIRM_RE = re.compile(
     r"(confirm|confirmar|ok|continue|verify|submit|login|entrar|fechar|iniciar\s*sess[aã]o|确认|確定|确定)",
@@ -617,6 +640,37 @@ class DuokeBot:
         except Exception:
             pass
 
+    async def apply_label(self, page, label_name: str = "gpt") -> bool:
+        """Abre o modal de etiquetas, clica na etiqueta `label_name` e confirma."""
+        try:
+            btn = page.locator(SEL.get("tag_button", "i.icon_mark_1")).first
+            await btn.wait_for(state="visible", timeout=5000)
+            await btn.click()
+
+            modal = page.locator(SEL.get("tag_modal", ".el-dialog.select_label_dialog")).first
+            await modal.wait_for(state="visible", timeout=5000)
+
+            items = modal.locator(SEL.get("tag_item", ".label_item .label_item_name"))
+            count = await items.count()
+            for idx in range(count):
+                el = items.nth(idx)
+                txt = (await el.inner_text() or "").strip().lower()
+                if txt == (label_name or "").strip().lower():
+                    await el.click()
+                    break
+            else:
+                await modal.locator(f"{SEL.get('tag_item', '.label_item .label_item_name')}:has-text('{label_name}')").first.click()
+
+            confirm = modal.locator(SEL.get("tag_confirm", ".el-button.el-button--primary")).first
+            if (await confirm.inner_text() or "").strip().lower().startswith("confirm"):
+                await confirm.click()
+            else:
+                await confirm.click()
+            return True
+        except Exception as e:
+            print(f"[DEBUG] apply_label falhou: {e}")
+            return False
+
     # ---------- ações manuais de login/2FA ----------
 
     async def close_modal(self, page, retries: int = 3):
@@ -904,8 +958,16 @@ class DuokeBot:
                 should, reply = True, RESP_FALLBACK_CURTO
 
             print(f"[DEBUG] decide: should={should} | Resposta: {reply}")
-            if not should:
+            decision_txt = (reply or "").strip().lower()
+            if (not should) or decision_txt == "ação: skip (pular)".lower():
+                await self.apply_label(page, label_name=getattr(settings, "label_on_skip", "gpt"))
+                print("[DEBUG] conversa marcada (skip)")
                 continue
+
+            if buyer_only:
+                if buyer_wants_missing_parts(buyer_only[-1]):
+                    await self.apply_label(page, label_name=getattr(settings, "label_on_missing_parts", "gpt"))
+                    print("[DEBUG] conversa marcada (quer peças faltantes)")
 
             if order_info.get("orderId") and "{ORDER_ID}" in reply:
                 reply = reply.replace("{ORDER_ID}", order_info["orderId"])
