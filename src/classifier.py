@@ -130,8 +130,8 @@ def decide_reply(
     text = " | ".join(t for r, t in pairs[-3:] if r == "buyer") if pairs else " | ".join(buyer_only[-3:])
     norm_text = _normalize(text)
     order_id = order_info.get("orderId", "")
-    messages = [t for _, t in pairs] if pairs else buyer_only
-    cls = classify(messages)
+    conv_pairs = pairs or [("buyer", t) for t in buyer_only]
+    cls = classify(conv_pairs)
     if cls.get("needs_reply") is False:
         return False, ""
 
@@ -140,7 +140,7 @@ def decide_reply(
         rule_id = "quebra_com_foto" if signals.get("tem_foto") else "quebra_sem_foto"
         base = get_reply_by_id(rule_id)
         if base:
-            refined = refine_reply(base, norm_text)
+            refined = refine_reply(base, conv_pairs)
             return True, refined
 
     reply = RESP_FALLBACK_CURTO
@@ -165,5 +165,5 @@ def decide_reply(
     elif STATUS_RE.search(norm_text) and order_info.get("status"):
         reply = RESP_STATUS.format(status=order_info["status"])
 
-    refined = refine_reply(reply, norm_text)
+    refined = refine_reply(reply, conv_pairs)
     return True, refined
