@@ -641,54 +641,53 @@ class DuokeBot:
             pass
 
     async def apply_label(self, page, label_name: str = "gpt") -> bool:
-    """Abre o modal de etiquetas, clica na etiqueta `label_name` e confirma."""
-    try:
-        # 1) Botão correto no cabeçalho do painel direito
-        btn_sel = SEL.get(
-            "tag_button",
-            ".cont_header .contact_action_icon:has(i.icon_mark_1), .contact_action .contact_action_icon:has(i.icon_mark_1)",
-        )
+        """Abre o modal de etiquetas, clica na etiqueta `label_name` e confirma."""
+        try:
+            # 1) Botão correto no cabeçalho do painel direito
+            btn_sel = SEL.get(
+                "tag_button",
+                ".cont_header .contact_action_icon:has(i.icon_mark_1), .contact_action .contact_action_icon:has(i.icon_mark_1)",
+            )
 
-        btn = page.locator(btn_sel).locator(":visible").first
-        await btn.scroll_into_view_if_needed()
-        await btn.wait_for(state="visible", timeout=5000)
-        await btn.click()
+            btn = page.locator(btn_sel).locator(":visible").first
+            await btn.scroll_into_view_if_needed()
+            await btn.wait_for(state="visible", timeout=5000)
+            await btn.click()
 
-        # 2) Modal de etiquetas
-        modal_sel = SEL.get("tag_modal", ".el-dialog.select_label_dialog, .el-dialog__wrapper:has(.label_item)")
-        modal = page.locator(modal_sel).first
-        await modal.wait_for(state="visible", timeout=5000)
+            # 2) Modal de etiquetas
+            modal_sel = SEL.get("tag_modal", ".el-dialog.select_label_dialog, .el-dialog__wrapper:has(.label_item)")
+            modal = page.locator(modal_sel).first
+            await modal.wait_for(state="visible", timeout=5000)
 
-        # 3) Selecionar etiqueta pelo texto
-        item_sel = SEL.get("tag_item", ".label_item .label_item_name, .label_item, span.label_item_name")
-        # tenta match exato (insensível a caixa)
-        items = modal.locator(item_sel)
-        count = await items.count()
-        target = None
-        for idx in range(count):
-            el = items.nth(idx)
-            txt = (await el.inner_text() or "").strip().lower()
-            if txt == (label_name or "").strip().lower():
-                target = el
-                break
-        if not target:
-            # fallback: contém texto
-            target = modal.locator(f'{item_sel}:has-text("{label_name}")').first
+            # 3) Selecionar etiqueta pelo texto
+            item_sel = SEL.get("tag_item", ".label_item .label_item_name, .label_item, span.label_item_name")
+            # tenta match exato (insensível a caixa)
+            items = modal.locator(item_sel)
+            count = await items.count()
+            target = None
+            for idx in range(count):
+                el = items.nth(idx)
+                txt = (await el.inner_text() or "").strip().lower()
+                if txt == (label_name or "").strip().lower():
+                    target = el
+                    break
+            if not target:
+                # fallback: contém texto
+                target = modal.locator(f'{item_sel}:has-text("{label_name}")').first
 
-        await target.scroll_into_view_if_needed()
-        await target.click()
+            await target.scroll_into_view_if_needed()
+            await target.click()
 
-        # 4) Confirmar e aguardar fechar
-        confirm_sel = SEL.get("tag_confirm", ".el-dialog__footer .el-button--primary")
-        confirm = modal.locator(confirm_sel).first
-        await confirm.click()
-        await modal.wait_for(state="hidden", timeout=4000)
+            # 4) Confirmar e aguardar fechar
+            confirm_sel = SEL.get("tag_confirm", ".el-dialog__footer .el-button--primary")
+            confirm = modal.locator(confirm_sel).first
+            await confirm.click()
+            await modal.wait_for(state="hidden", timeout=4000)
 
-        return True
-    except Exception as e:
-        print(f"[DEBUG] apply_label falhou: {e}")
-        return False
-
+            return True
+        except Exception as e:
+            print(f"[DEBUG] apply_label falhou: {e}")
+            return False
 
     # ---------- ações manuais de login/2FA ----------
 
