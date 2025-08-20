@@ -133,11 +133,15 @@ def decide_reply(
     4. Sempre passa o resultado pelo ``refine_reply`` para polir o tom.
     """
     order_info = order_info or {}
-    text = " | ".join(t for r, t in pairs[-3:] if r == "buyer") if pairs else " | ".join(buyer_only[-3:])
+
+    # Considere apenas as últimas 8 mensagens enviadas pelo comprador
+    recent_msgs = buyer_only[-8:]
+    text = " | ".join(recent_msgs[-3:])
     norm_text = _normalize(text)
     order_id = order_info.get("orderId", "")
-    messages = [t for _, t in pairs] if pairs else buyer_only
-    cls = classify(messages)
+
+    # Classificação baseada somente nas mensagens do comprador
+    cls = classify(recent_msgs)
     if cls.get("needs_reply") is False:
         return False, ""
 
