@@ -774,7 +774,7 @@ class DuokeBot:
             print(f"[DEBUG] conversa {i}: {len(pairs)} msgs (com role)")
             if not pairs:
                 continue
-
+                
             buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
 
             conv_key = order_info.get("orderId") or "|".join(buyer_only[-2:]) or str(i)
