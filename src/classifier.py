@@ -80,15 +80,10 @@ RESP_DOURADO = (
 )
 
 RESP_STATUS = "O status atual do pedido é **{status}**. Assim que houver novidades, aviso por aqui."
-
 RESP_FALLBACK_CURTO = "Desculpa, não entendi. Pode explicar em uma frase?"
-
-RESP_NOT_CHECKED = (
-    "Sem problema! Quando conseguir verificar, me avise por aqui \U0001F60A."
-)
+RESP_NOT_CHECKED = "Sem problema! Quando conseguir verificar, me avise por aqui \U0001F60A."
 
 # -------------------- helpers --------------------
-
 def _normalize(text: str) -> str:
     text = text.lower().strip()
     text = "".join(
@@ -119,7 +114,6 @@ def prod_defaults(prod: dict | None) -> dict:
     }
 
 # -------------------- main --------------------
-
 def decide_reply(
     _pairs: List[Tuple[str, str]] | None,
     buyer_only: List[str],
@@ -178,3 +172,4 @@ def decide_reply(
 
     refined = refine_reply(reply, norm_text)
     return True, refined
+
