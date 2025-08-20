@@ -640,9 +640,9 @@ class DuokeBot:
         except Exception:
             pass
 
-async def apply_label(self, page, label_name: str = "gpt") -> bool:
+    async def apply_label(self, page, label_name: str = "gpt") -> bool:
     """Abre o modal de etiquetas, clica na etiqueta `label_name` e confirma."""
-    try:
+        try:
         # 1) Botão correto no cabeçalho do painel direito
         btn_sel = SEL.get(
             "tag_button",
