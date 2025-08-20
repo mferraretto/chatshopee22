@@ -17,7 +17,7 @@ async def main():
         print("[DEBUG] Mensagens recebidas para classificação:")
         for role, msg in pairs:
             print(f"- {role}: {msg}")
-        should, reply = decide_reply(pairs, buyer_only, order_info)
+        should, reply = decide_reply(buyer_only, order_info)
         print(f"[DEBUG] Deve responder? {should} | Resposta: {reply}")
         return should, reply
 
