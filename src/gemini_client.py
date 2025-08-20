@@ -43,11 +43,11 @@ Exclusões: "foto"
 Resposta: "Oii, espero que esteja bem. Sinto muito por isso! Para agilizar, você poderia me enviar uma foto do item? Assim entendo melhor e já te trago a melhor solução."
 
 ID: quebra_com_foto
-Intenções de Correspondência: "quebrado", "foto", "como solicitar", "como faço devolução", "como pedir reembolso", "enviam outro", "enviam outra", "troca urgente", "desesperad"
+Intenções de Correspondência: "quebrado", "quebrou", "quebrado em duas partes", "produto veio danificado", "troca urgente", "enviam outro", "enviam outra", "desesperad", "solto", "descolado"
 Resposta: "Olá! Sentimos muito pelo ocorrido. Podemos resolver de 3 formas: \n- Reembolso parcial (você fica com o produto e recebe parte do valor);\n- Devolução pelo app (reembolso total após o retorno);\n- Envio de nova peça (sem custo pela peça; você paga apenas o frete). Me avisa qual prefere que eu resolvo por aqui!"
 
 ID: reembolso_parcial
-Intenções de Correspondência: "reembolso parcial", "parcial"
+Intenções de Correspondência: "reembolso parcial", "parcial", "primeira opção"
 Resposta: "Olá! Para solicitar reembolso parcial: Minhas Compras > pedido > Devolver/Reembolsar > Reembolso Parcial. Anexe fotos e descreva o problema. Qualquer dúvida, estou aqui!"
 
 ID: nova_peca
@@ -72,7 +72,7 @@ Resposta: "Entendo a frustração. A logística é da Shopee, mas já abri um ch
 
 ID: cilindro_pequeno
 Intenções de Correspondência: "cilindro pequeno", "cilindro não é grande", "cilindro errado", "cilindros compactos", "trio compacto"
-Exclusões: "arco", "arcos", "arco de balão", "arco menor", "diâmetro do arco"
+Exclusões: "arco", "arcos", "painel", "painel pequeno", "painel grande", "arco de balão", "arco menor", "diâmetro do arco"
 Resposta: "Boa tarde! Esse anúncio é do trio compacto (3 peças menores), como consta na descrição e medidas. Muitos clientes usam 2 trios para alcançar o tamanho padrão. Se quiser completar, ofereço 25% no segundo trio."
 
 ID: arco_tamanho
