@@ -772,7 +772,8 @@ class DuokeBot:
             depth = int(getattr(settings, "history_depth", 8) or 8)
             pairs = await self.read_messages_with_roles(page, depth * 2)
             print(f"[DEBUG] conversa {i}: {len(pairs)} msgs (com role)")
-            if not pairs:
+            if not pairs or pairs[-1][0] != "buyer":
+                print("[DEBUG] Última mensagem não é do comprador; pulando conversa.")
                 continue
 
             buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]

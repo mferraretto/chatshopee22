@@ -47,6 +47,8 @@ STATUS_RE = re.compile(
     re.I,
 )
 
+NOT_CHECKED_RE = re.compile(r"\b(ainda\s+)?nao\s+(verifiquei|conferi|olhei)\b", re.I)
+
 # -------------------- respostas --------------------
 RESP_HUMANO = (
     "Entendi, e obrigado por avisar 🙏. Sou do atendimento **humano** e vou cuidar do seu caso agora.\n"
@@ -80,6 +82,10 @@ RESP_DOURADO = (
 RESP_STATUS = "O status atual do pedido é **{status}**. Assim que houver novidades, aviso por aqui."
 
 RESP_FALLBACK_CURTO = "Desculpa, não entendi. Pode explicar em uma frase?"
+
+RESP_NOT_CHECKED = (
+    "Sem problema! Quando conseguir verificar, me avise por aqui \U0001F60A."
+)
 
 # -------------------- helpers --------------------
 
@@ -115,7 +121,7 @@ def prod_defaults(prod: dict | None) -> dict:
 # -------------------- main --------------------
 
 def decide_reply(
-    pairs: List[Tuple[str, str]],
+    pairs: List[Tuple[str, str]] | None,
     buyer_only: List[str],
     order_info: dict | None = None,
 ) -> Tuple[bool, str]:
@@ -127,10 +133,16 @@ def decide_reply(
     4. Sempre passa o resultado pelo ``refine_reply`` para polir o tom.
     """
     order_info = order_info or {}
-    text = " | ".join(t for r, t in pairs[-3:] if r == "buyer") if pairs else " | ".join(buyer_only[-3:])
+    if pairs and pairs[-1][0] != "buyer":
+        return False, ""
+    text = (
+        " | ".join(t for r, t in pairs[-3:] if r == "buyer")
+        if pairs
+        else " | ".join(buyer_only[-3:])
+    )
     norm_text = _normalize(text)
     order_id = order_info.get("orderId", "")
-    messages = [t for _, t in pairs] if pairs else buyer_only
+    messages = buyer_only
     cls = classify(messages)
     if cls.get("needs_reply") is False:
         return False, ""
@@ -164,6 +176,9 @@ def decide_reply(
 
     elif STATUS_RE.search(norm_text) and order_info.get("status"):
         reply = RESP_STATUS.format(status=order_info["status"])
+
+    elif NOT_CHECKED_RE.search(norm_text):
+        reply = RESP_NOT_CHECKED
 
     refined = refine_reply(reply, norm_text)
     return True, refined
