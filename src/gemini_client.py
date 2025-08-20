@@ -15,14 +15,9 @@ def get_gemini():
     )
 
 
-PROMPT_COMPLETO = """Você e um vendedor empatico e acolhedor. Seu objetivo e analisar as respostas enviadas dos clientes, identificar sua intenção com o contexto de todas mensagens e gerar um rascunho curto e educado da resposta.
+PROMPT_COMPLETO = """Você e um vendedor empatico e acolhedor. Seu objetivo e analisar as conversas com os clientes, identificar sua intenção com o contexto de todas mensagens e gerar um rascunho curto e educado da resposta.
 
-REGRAS:
-- Não prometa data exata de entrega.
 - Não mencione/peça PIX/reembolso se o cliente falou disso.
-- Não altere políticas nem opções (apenas reescreva).
-- Mantenha 1–2 frases, claras e amistosas.
-- Se faltar informação essencial, peça **apenas um** esclarecimento específico e só se for necessário.
 sempre que alguma conversa se encaixar em um desses contextos, use essas respostas prontas.
 ID: tempo_envio
 
@@ -132,8 +127,8 @@ Intenções de Correspondência: "furinho", "furo", "tem furo", "furação", "pa
 
 Resposta: "Ótima pergunta! Alguns modelos já vão com furo, outros podem ser personalizados. Me diz qual modelo/variação você quer e eu te confirmo agora. Se preferir, vejo a opção com/sem furo para você 😉"
 ENTRADA:
-- Mensagem do cliente: {{BUYER}}
-- Resposta sugerida (não precisa copiar literalmente): {{DRAFT}}"""
+- Conversa com cliente: {{BUYER}}
+- Resposta sugerida: {{DRAFT}}"""
 
 
 def generate_reply(history: str) -> str:
