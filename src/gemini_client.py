@@ -63,7 +63,8 @@ Intenções de Correspondência: "pedido parado", "não anda", "não atualiza", 
 Resposta: "Entendo a frustração. A logística é da Shopee, mas já abri um chamado reforçando a urgência do seu caso. Você também pode falar com o suporte pelo app (Ajuda). Vou acompanhar por aqui."
 
 ID: cilindro_pequeno
-Intenções de Correspondência: "cilindro pequeno", "cilindro não é grande", "cilindro errado"
+Intenções de Correspondência: "cilindro pequeno", "cilindro não é grande", "cilindro errado", "cilindros compactos", "trio compacto"
+Exclusões: "arco", "arcos", "arco de balão", "arco menor", "diâmetro do arco"
 Resposta: "Boa tarde! Esse anúncio é do trio compacto (3 peças menores), como consta na descrição e medidas. Muitos clientes usam 2 trios para alcançar o tamanho padrão. Se quiser completar, ofereço 25% no segundo trio."
 
 ID: pix_pendente
