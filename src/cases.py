@@ -1,8 +1,8 @@
 from __future__ import annotations
-from pathlib import Path
 import csv
 from datetime import datetime, timezone
-from typing import List, Dict, Any
+from pathlib import Path
+from typing import Any, Dict, List
 
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
@@ -27,18 +27,43 @@ def _ensure_header():
             w.writerow(HEADER)
 
 
+TRIGGERS = {
+    "reembolso parcial": ["reembolso parcial"],
+    "enviar nova peça": ["nova peça", "nova peca"],
+    "enviar peça faltante": [
+        "peça faltante",
+        "peca faltante",
+        "peça faltando",
+        "peca faltando",
+    ],
+}
+
+
 def infer_problema(buyer_msgs: List[str]) -> str:
-    """
-    Heurística simples: usa a última mensagem do cliente.
-    (Depois dá pra trocar por classificador, regras, etc.)
+    """Infere a categoria do problema a partir da última mensagem do cliente.
+
+    Apenas registra solicitações de reembolso parcial ou de envio de peças
+    (nova ou faltante). Se não houver correspondência, retorna string vazia.
     """
     if not buyer_msgs:
         return ""
-    return buyer_msgs[-1].strip().replace("\n", " ")
+
+    last = buyer_msgs[-1].strip().lower()
+    for label, kws in TRIGGERS.items():
+        for kw in kws:
+            if kw in last:
+                return label
+    return ""
 
 
-def append_row(order_info: Dict[str, Any], buyer_only: List[str]):
+def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
+    problema = infer_problema(buyer_only)
+    if not problema:
+        return
+
     _ensure_header()
+    ultima_msg = buyer_only[-1].strip().replace("\n", " ") if buyer_only else ""
+
     row = [
         datetime.now(timezone.utc).isoformat(timespec="seconds"),
         order_info.get("orderId", ""),
@@ -46,9 +71,9 @@ def append_row(order_info: Dict[str, Any], buyer_only: List[str]):
         order_info.get("title", ""),
         order_info.get("variation", ""),
         order_info.get("sku", ""),
-        infer_problema(buyer_only),
-        buyer_only[-1].strip().replace("\n", " ") if buyer_only else "",
+        problema,
+        ultima_msg,
     ]
+
     with CSV_PATH.open("a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(row)
+        csv.writer(f).writerow(row)
