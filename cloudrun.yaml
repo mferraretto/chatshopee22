@@ -1,31 +1,30 @@
 # Cloud Run service for the web console
-apiVersion: serving.knative.dev/v1
+apiVersion: run.googleapis.com/v1
 kind: Service
 metadata:
   name: duoke-console
 spec:
   template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/min-instances: "1"   # opcional
+        run.googleapis.com/max-instances: "1"   # opcional
+        run.googleapis.com/concurrency: "1"     # opcional
     spec:
       containers:
         - image: gcr.io/PROJECT-ID/duoke-console
+          command: ["uvicorn"]
+          args: ["app_ui:app", "--host", "0.0.0.0", "--port", "8080"]
           env:
             - name: PYTHONUNBUFFERED
               value: "1"
-          command: ["sh", "-c", "uvicorn app_ui:app --host 0.0.0.0 --port $PORT"]
----
-# Cloud Run job for the background worker
-apiVersion: run.googleapis.com/v1
-kind: Job
-metadata:
-  name: duoke-bot
-spec:
-  template:
-    template:
-      spec:
-        containers:
-          - image: gcr.io/PROJECT-ID/duoke-bot
-            command: ["python", "-m", "src.run_loop"]
-            env:
-              - name: PYTHONUNBUFFERED
-                value: "1"
-        restartPolicy: Never
+            # adicione suas vars reais:
+            - name: GEMINI_API_KEY
+              value: "xxxxx"
+            - name: DUOKE_EMAIL
+              value: "xxxxx"
+            - name: DUOKE_PASSWORD
+              value: "xxxxx"
+            - name: HISTORY_DEPTH
+              value: "20"
