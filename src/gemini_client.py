@@ -1,3 +1,4 @@
+# gemini_client.py
 import google.generativeai as genai
 from .config import settings
 
@@ -19,15 +20,22 @@ PROMPT_COMPLETO = r"""Você é um vendedor empático e acolhedor. Seu objetivo �
 
 REGRAS GERAIS:
 - Não prometa data exata de entrega (logística Shopee define).
-- Se o cliente falar de PIX/comprovante/reembolso que “não caiu”, **não responda**: devolva “Ação: skip (pular)”.
-- Não mude políticas; apenas informe com clareza.
+- Nunca inclua rastreio ou status do pedido na resposta (use APENAS para evitar contradições).
+- Se o estado_pedido indicar "enviado" ou "entregue", não use a resposta de "tempo_envio".
 - Se faltar informação essencial, peça **um** esclarecimento objetivo.
+- Não mude políticas; apenas informe com clareza.
+- Se o cliente falar de PIX/comprovante/reembolso que “não caiu”, **não responda**: devolva **exatamente** “Ação: skip (pular)”.
 
 CATÁLOGO DE RESPOSTAS (use quando corresponder):
 
 ID: tempo_envio
 Intenções de Correspondência: "quanto tempo", "demora para enviar", "quando envia", "prazo de envio"
 Resposta: "Oii, tudo bem? As compras feitas hoje são enviadas amanhã pela manhã e chegam, em média, de 3 a 5 dias úteis."
+
+ID: prazo_entrega_data_especifica
+Intenções de Correspondência: "chegue até", "chegar até", "até o dia", "preciso para", "prazo até", "aniversário", "urgente", "final de semana", "data específica"
+Exclusões: "recebi", "veio", "chegou"
+Resposta: "Oii! Enviamos no próximo dia útil e o prazo médio é de 3 a 5 dias úteis após a postagem. Não consigo prometer data exata, então recomendo finalizar hoje e escolher o frete mais rápido. Assim que postar, te mando o rastreio e acompanho de perto. Pode ser?"
 
 ID: quebra_sem_foto
 Intenções de Correspondência: "quebrado", "rachado", "defeito", "trincado", "danificado"
@@ -67,6 +75,11 @@ Intenções de Correspondência: "cilindro pequeno", "cilindro não é grande", 
 Exclusões: "arco", "arcos", "arco de balão", "arco menor", "diâmetro do arco"
 Resposta: "Boa tarde! Esse anúncio é do trio compacto (3 peças menores), como consta na descrição e medidas. Muitos clientes usam 2 trios para alcançar o tamanho padrão. Se quiser completar, ofereço 25% no segundo trio."
 
+ID: arco_tamanho
+Intenções de Correspondência: "arco", "arcos", "diâmetro do arco", "tamanho do arco", "montar menor", "reduzir tamanho do arco"
+Exclusões: "cilindro", "cilindros", "trio compacto"
+Resposta: "Oi! Esse modelo de arco permite ajustar o tamanho na montagem. Se quiser menor, é só reduzir a abertura/ângulo ao fixar. Posso te enviar o vídeo certo para o seu modelo?"
+
 ID: pix_pendente
 Intenções de Correspondência: "pix", "comprovante", "reembolso nao caiu", "não recebi o pix", "não caiu"
 Ação: "skip" (pular)
@@ -75,11 +88,6 @@ ID: embalagem_segura_precompra
 Intenções de Correspondência: "embalado", "embalagem", "amassar", "amassado", "avaria", "frágil", "fragil", "quebrar no envio", "bem embalado"
 Exclusões: "recebi", "chegou", "veio", "foto", "reembolso", "devolver", "devolução"
 Resposta: "Oii! Caprichamos na embalagem: proteção interna e caixa reforçada para evitar avarias. Se acontecer algo, te ajudamos pelo app (troca, reposição ou reembolso). Pode comprar tranquilo(a) 🙂"
-
-ID: prazo_entrega_data_especifica
-Intenções de Correspondência: "chegue até", "chegar até", "até o dia", "preciso para", "prazo até", "aniversário", "urgente", "final de semana", "data específica"
-Exclusões: "recebi", "veio", "chegou"
-Resposta: "Oii! Enviamos no próximo dia útil e o prazo médio é de 3 a 5 dias úteis após a postagem. Não consigo prometer data exata, então recomendo finalizar hoje e escolher o frete mais rápido. Assim que postar, te mando o rastreio e acompanho de perto. Pode ser?"
 
 ID: saudacao_expectativa_positiva
 Intenções de Correspondência: "ansioso", "espero que venha perfeito", "venha perfeito", "ansiosa", "tomara que venha", "chegue certinho"
@@ -100,30 +108,43 @@ Resposta: "Oi! Só para eu te ajudar direitinho, você pode me explicar um pouqu
 FORMATO DE SAÍDA:
 - Se encaixar em “pix_pendente”, devolva **exatamente**: Ação: skip (pular)
 - Caso contrário, devolva **apenas** a mensagem final ao cliente (1–2 frases). Não inclua “ID:”, “Resposta:”, análises ou explicações.
-
-ENTRADA:
-- Conversa com cliente: {{BUYER}}
-- Resposta sugerida: {{DRAFT}}
 """
 
 
 def _order_stage_context(order_info: dict | None) -> str:
-    """Gera um pequeno resumo do estágio do pedido para orientar o modelo."""
+    """Gera um pequeno resumo do estágio do pedido para orientar o modelo (NÃO exibir ao cliente)."""
+    # Default (sem info)
     if not order_info:
-        return "estado_pedido: desconhecido\norder_id:\nstatus:\npayment_time:\nlogistics_status:\ncompleted_time:\n"
+        return (
+            "estado_pedido: desconhecido\n"
+            "order_id:\n"
+            "status:\n"
+            "payment_time:\n"
+            "logistics_status:\n"
+            "latest_logistics_description:\n"
+            "completed_time:\n"
+        )
 
-    st = (order_info.get("status") or "").lower()
+    st_raw = (order_info.get("status") or order_info.get("status_consolidado") or "").strip()
+    st = st_raw.lower()
+
     fields = order_info.get("fields") or {}
     order_id = order_info.get("orderId") or ""
 
     payment_time = fields.get("Payment Time", "") or fields.get("Hora do pagamento", "")
     completed_time = fields.get("Completed Time", "") or fields.get("Hora de conclusão", "")
     logistics_status = fields.get("Logistics Status", "") or fields.get("Status logístico", "")
+    latest_desc = order_info.get("logistics_latest_desc", "") or fields.get("Latest Logistics Description", "")
 
-    # heurística simples de estágio
-    if completed_time or "entregue" in st or "delivered" in st:
+    # Heurística de estágio
+    shipped_tokens = ("shipped", "enviado", "a caminho", "in transit", "out for delivery", "despachado")
+    delivered_tokens = ("delivered", "entregue", "completed", "finalizado", "concluído")
+
+    if completed_time or any(tok in st for tok in delivered_tokens):
         fase = "entregue"
-    elif order_id or payment_time or any(k in st for k in ("to ship", "ready to ship", "shipped", "enviado", "a caminho")):
+    elif any(tok in st for tok in shipped_tokens) or "pedido entregue" in latest_desc.lower():
+        fase = "enviado"
+    elif order_id or payment_time or any(tok in st for tok in ("to ship", "ready to ship")):
         fase = "pos_venda"
     else:
         fase = "pre_venda"
@@ -131,9 +152,10 @@ def _order_stage_context(order_info: dict | None) -> str:
     return (
         f"estado_pedido: {fase}\n"
         f"order_id: {order_id}\n"
-        f"status: {st}\n"
+        f"status: {st_raw}\n"
         f"payment_time: {payment_time}\n"
         f"logistics_status: {logistics_status}\n"
+        f"latest_logistics_description: {latest_desc}\n"
         f"completed_time: {completed_time}\n"
     )
 
@@ -150,6 +172,7 @@ def generate_reply(history: str, order_info: dict | None = None) -> str:
 
 INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
 - Use o contexto do pedido abaixo para entender se é pré-venda, pós-venda, enviado ou entregue.
+- Se estado_pedido for "enviado" ou "entregue", **não** use o template de tempo_envio. Se perguntarem prazo, peça UM esclarecimento objetivo (ex.: “é para este pedido ou um novo?”) sem citar status/rastreio.
 - Se a política for "pular" (ex.: pix/comprovante), devolva APENAS: "Ação: skip (pular)".
 - Caso contrário, devolva APENAS a mensagem final em 1–2 frases (sem "ID:", sem "Resposta:", sem análises).
 
@@ -161,6 +184,17 @@ INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
 """.strip()
 
         resp = model.generate_content(prompt)
-        return (getattr(resp, "text", "") or "").strip()
+        text = (getattr(resp, "text", "") or "").strip()
+
+        # Higienização: remover aspas externas e evitar "Ação:" indevida
+        if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
+            text = text[1:-1].strip()
+
+        low = text.lower()
+        if low.startswith("ação:") and "skip" not in low:
+            # Não permitir outras "ações" além de skip
+            text = text.replace("Ação:", "").strip()
+
+        return text
     except Exception:
         return ""
