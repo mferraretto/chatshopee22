@@ -775,13 +775,13 @@ class DuokeBot:
         try:
             await stars.first().hover()
             popup = page.locator(SEL["review_text"])
-            await popup.first().wait_for(state="visible", timeout=2000)
+            await popup.first().wait_for(state="visible", timeout=9000)
             return (await popup.first().inner_text() or "").strip()
         except Exception:
             try:
                 await stars.first().click()
                 popup = page.locator(SEL["review_text"])
-                await popup.first().wait_for(state="visible", timeout=2000)
+                await popup.first().wait_for(state="visible", timeout=9000)
                 return (await popup.first().inner_text() or "").strip()
             except Exception:
                 return ""
