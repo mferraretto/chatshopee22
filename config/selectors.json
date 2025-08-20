@@ -5,7 +5,6 @@
 
   "buyer_message": "ul.message_main li.lt .msg_text .text_cont, ul.message_main li.lt .text_cont, ul.message_main li.lt .bubble .text, ul.message_main li.lt .record_item .content",
 
-  // ✅ novo: bolhas do vendedor (lado direito)
   "seller_message": "ul.message_main li.rt .msg_text .text_cont, ul.message_main li.rt .text_cont, ul.message_main li.rt .bubble .text, ul.message_main li.rt .record_item .content",
 
   "message_text": "ul.message_main .msg_text .text_cont, ul.message_main .text_cont, ul.message_main .bubble .text, ul.message_main .record_item .content",
@@ -26,7 +25,6 @@
   "tag_item": ".label_container .label_item .label_item_name, .label_container .label_item, span.label_item_name",
   "tag_confirm": ".el-dialog__footer .el-button--primary, .select_label_dialog .el-button--primary",
 
-  // 🔧 mais específico + robusto
   "order_status_tag": "div.order_item_status .order_item_status_tags .el-tag, div.order_item_status .el-tag",
 
   "order_code": "div.order_item_title span.mr_4",
@@ -44,14 +42,12 @@
   "shipping_provider": "div.order_item_logistics .flex:has(label[title='Shipping Provider']) span",
   "tracking_number": "div.order_item_logistics .tracking_code",
 
-  // 🔧 fallback: alguns casos não têm title → pegue o texto
   "logistics_status": "div.order_item_logistics .flex:has(label[title='Logistics Status']) span[title], div.order_item_logistics .flex:has(label[title='Logistics Status']) .ml_8 span",
 
   "latest_logistics_description": "div.order_item_logistics .flex:has(label[title='Latest Logistics Description']) .el-popover__reference",
   "logistics_update_time": "div.order_item_logistics .flex:has(label[title='Logistics Update Time']) span.t_r",
   "completed_time": "div.order_item_logistics .flex:has(label[title='Completed Time']) span",
 
-  // ✅ novos: review via estrelas
   "review_stars": ".order_item_products_item_info_rate .el-rate",
   "review_text": ".order_review_popover .review_content, .review_content"
 }
