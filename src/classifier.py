@@ -37,7 +37,20 @@ def _sanitize_reply(text: str) -> str:
 
     return t
 
+
+ARCO = re.compile(r"\b(arco|arcos|di[âa]metro do arco|tamanho do arco|montar menor|reduzir tamanho)\b", re.I)
+CIL = re.compile(r"\b(cilindro|cilindros|trio compacto|cilindro pequeno|cilindro errado)\b", re.I)
+
+
+def intent_from_text(txt: str) -> str:
+    if ARCO.search(txt) and not CIL.search(txt):
+        return "arco_tamanho"
+    if CIL.search(txt) and not ARCO.search(txt):
+        return "cilindro_pequeno"
+    return "fallback"
+
 def decide_reply(
+    pairs: List[Tuple[str, str]],
     buyer_only: List[str],
     order_info: dict | None = None,
 ) -> Tuple[bool, str]:
@@ -48,10 +61,17 @@ def decide_reply(
     if not msgs:
         return False, ""
 
-    history = "\n".join(f"buyer: {m.strip()}" for m in msgs)
+    history = order_info.get("history_block") if order_info else None
+    if not history:
+        history = "\n".join(msgs)
 
-    # >>> agora passamos order_info para a IA
-    reply = generate_reply(history, order_info=order_info)
+    status = order_info.get("status_consolidado", "") if order_info else ""
+    logdesc = order_info.get("latest_desc", "") if order_info else ""
+
+    # exemplo de uso do classificador regex (opcional)
+    _ = intent_from_text(" ".join(msgs))
+    
+    reply = generate_reply(history, status=status, logdesc=logdesc)
     clean = _sanitize_reply(reply)
     if clean:
         return True, clean
