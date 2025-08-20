@@ -15,6 +15,7 @@ from playwright.async_api import (
 )
 from .config import settings
 from .classifier import RESP_FALLBACK_CURTO
+from .cases import append_row as log_case
 
 # Carrega seletores configuráveis
 SEL = json.loads(
@@ -1094,6 +1095,12 @@ class DuokeBot:
             await page.wait_for_timeout(
                 int(getattr(settings, "delay_between_actions", 1.0) * 1000)
             )
+
+            # registra o atendimento no CSV
+            try:
+                log_case(order_info, buyer_only)
+            except Exception as e:
+                print(f"[DEBUG] falha ao registrar atendimento: {e}")
 
     async def run_once(self, decide_reply_fn):
         """Modo pontual (mantido por compat)."""
