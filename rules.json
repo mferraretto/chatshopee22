@@ -14,7 +14,7 @@
   {
     "id": "quebra_com_foto",
     "active": true,
-    "match": { "all_contains": ["quebrado", "foto", "como solicitar", "como faço devolução", "como pedir reembolso", "enviam outro", "enviam outra", "troca urgente", "desesperad"] },
+    "match": { "all_contains": ["quebrado", "quebrou", "quebrado em duas partes", "produto veio danificado", "troca urgente", "enviam outro", "enviam outra", "desesperad", "solto", "descolado"] },
     "reply": "Olá! Sentimos muito pelo ocorrido. Podemos resolver de 3 formas:\n- Reembolso parcial — você fica com o produto e recebe parte do valor de volta.\n- Devolução pelo app da Shopee — com reembolso total após o retorno.\n- Envio de nova peça — sem custo pela peça, você paga apenas o frete, e não precisa devolver nada.\nMe avisa qual opção prefere que resolvo tudo por aqui!"
   },
   {
@@ -56,7 +56,10 @@
   {
     "id": "cilindro_pequeno",
     "active": true,
-    "match": { "any_contains": ["cilindro pequeno", "cilindro não é grande", "cilindro errado"] },
+    "match": {
+      "any_contains": ["cilindro pequeno", "cilindro não é grande", "cilindro errado", "cilindros compactos", "trio compacto"]
+      "none_contains": ["arco", "arcos", "painel", "painel pequeno", "painel grande", "arco de balão", "arco menor", "diâmetro do arco"]
+    },
     "reply": "Boa tarde! Tudo bem? Poxa, sinto muito pela confusão. Esse anúncio é referente ao trio compacto (3 peças menores), como mostramos na descrição e nas imagens com as medidas. Para alcançar o tamanho padrão, muitos clientes usam 2 trios compactos. Se quiser completar, posso te oferecer 25% de desconto no segundo trio!"
   },
   {
