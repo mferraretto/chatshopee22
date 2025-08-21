@@ -15,7 +15,7 @@ from playwright.async_api import (
 )
 from .config import settings
 from .classifier import RESP_FALLBACK_CURTO
-from .cases import append_row as log_case, append_label as log_label
+from .cases import append_row as log_case, append_label as log_label, export_to_excel
 
 # Carrega seletores configuráveis
 SEL = json.loads(
@@ -1011,6 +1011,7 @@ class DuokeBot:
             print(f"[DEBUG] decide: should={should} | Resposta: {reply}")
             decision_txt = (reply or "").strip().lower()
             if (not should) or decision_txt == "ação: skip (pular)".lower():
+                order_info["skip"] = True
                 try:
                     log_case(order_info, buyer_only)
                 except Exception as e:
@@ -1061,6 +1062,7 @@ class DuokeBot:
                 await ctx.close()
             finally:
                 self.current_page = None
+    export_to_excel()
 
     async def run_forever(self, decide_reply_fn, idle_seconds: float = 3.0):
         """
@@ -1101,3 +1103,4 @@ class DuokeBot:
                     except Exception:
                         pass
                     self.current_page = None
+    export_to_excel()
