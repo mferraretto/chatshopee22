@@ -5,7 +5,7 @@ import os
 import re
 import json
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Dict, Any
 import time
 
 from playwright.async_api import (
@@ -47,6 +47,60 @@ def buyer_wants_missing_parts(text: str) -> bool:
         "prefiro receber a peça",
     ]
     return any(s in t for s in simples)
+
+
+async def safe_text(locator):
+    try:
+        if await locator.count() == 0:
+            return None
+        txt = (await locator.first.inner_text()).strip()
+        return re.sub(r"\s+", " ", txt)
+    except Exception:
+        return None
+
+
+async def extract_order_from_dom(page, SEL: dict) -> Dict[str, Any]:
+    await page.wait_for_selector(SEL["order.product_list"], state="visible", timeout=20000)
+    await page.wait_for_selector(SEL["order.buyer_name"], state="visible", timeout=20000)
+
+    buyer_name = await safe_text(page.locator(SEL["order.buyer_name"]))
+
+    items = page.locator(SEL["order.product_list"])
+    count = await items.count()
+    products: List[Dict[str, str]] = []
+
+    for i in range(count):
+        item = items.nth(i)
+
+        title = await safe_text(item.locator(SEL["order.product_title"]))
+        variation_raw = await safe_text(item.locator(SEL["order.product_variation"]))
+        sku_raw = await safe_text(item.locator(SEL["order.product_sku"]))
+
+        variation = None
+        if variation_raw:
+            variation = re.sub(r"^(Varia[çc][aã]o[:：]\s*)?", "", variation_raw, flags=re.I).strip()
+            if variation in ("-", "—", "–", ""):
+                variation = ""
+
+        sku = None
+        if sku_raw:
+            sku = re.sub(r"^SKU[:：]\s*", "", sku_raw, flags=re.I).strip()
+
+        products.append({
+            "title": title or "",
+            "variation": variation or "",
+            "sku": sku or "",
+        })
+
+    first = products[0] if products else {"title": "", "variation": "", "sku": ""}
+
+    return {
+        "buyer_name": buyer_name or "",
+        "products": products,
+        "title": first["title"],
+        "variation": first["variation"],
+        "sku": first["sku"],
+    }
 
 
 # Botões de confirmação comuns em modais (várias línguas)
@@ -906,40 +960,46 @@ class DuokeBot:
             await self.pause_event.wait()
 
             # ----- Order info + status consolidado -----
+            order_info = {}
             try:
                 order_info = await self.read_sidebar_order_info(page)
-                fields = order_info.get("fields") or {}
-                status_tag = (order_info.get("status") or "").strip()
-
-                # Logistics Status (ex.: Delivered)
-                logistics_status = ""
-                for k, v in fields.items():
-                    if k.lower().startswith("logistics status"):
-                        logistics_status = (v or "").strip()
-                        break
-
-                # Última descrição logística (ex.: Pedido entregue)
-                latest_desc = ""
-                for k, v in fields.items():
-                    if k.lower().startswith("latest logistics description"):
-                        latest_desc = (v or "").strip()
-                        break
-
-                # (opcional) Tracking, caso venha nos fields
-                for k, v in fields.items():
-                    if k.lower().startswith("tracking number"):
-                        order_info["tracking"] = (v or "").strip()
-                        break
-
-                order_info["status_consolidado"] = (
-                    status_tag or logistics_status or latest_desc or "desconhecido"
-                )
-                order_info["logistics_latest_desc"] = latest_desc
-
-                print("[DEBUG] Order info:", order_info)
             except Exception as e:
-                order_info = {}
                 print(f"[DEBUG] falha ao ler order_info: {e}")
+            try:
+                dom_info = await extract_order_from_dom(page, SEL)
+                order_info.update(dom_info)
+            except Exception as e:
+                print(f"[DEBUG] falha ao extrair order DOM: {e}")
+
+            fields = order_info.get("fields") or {}
+            status_tag = (order_info.get("status") or "").strip()
+
+            # Logistics Status (ex.: Delivered)
+            logistics_status = ""
+            for k, v in fields.items():
+                if k.lower().startswith("logistics status"):
+                    logistics_status = (v or "").strip()
+                    break
+
+            # Última descrição logística (ex.: Pedido entregue)
+            latest_desc = ""
+            for k, v in fields.items():
+                if k.lower().startswith("latest logistics description"):
+                    latest_desc = (v or "").strip()
+                    break
+
+            # (opcional) Tracking, caso venha nos fields
+            for k, v in fields.items():
+                if k.lower().startswith("tracking number"):
+                    order_info["tracking"] = (v or "").strip()
+                    break
+
+            order_info["status_consolidado"] = (
+                status_tag or logistics_status or latest_desc or "desconhecido"
+            )
+            order_info["logistics_latest_desc"] = latest_desc
+
+            print("[DEBUG] Order info:", order_info)
 
             # ----- Mensagens + history -----
             depth = int(getattr(settings, "history_depth", 8) or 8)
