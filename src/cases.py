@@ -75,23 +75,12 @@ def infer_problema(buyer_msgs: List[str]) -> str:
 
 
 def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
-    """Registra informações básicas de atendimentos.
-
-    Conversas que são apenas "puladas" também devem ser salvas. Para isso, o
-    `Duoke` marca `order_info['skip']=True` antes de chamar esta função. Nesse
-    caso, gravamos a linha mesmo que `infer_problema` não retorne nada e
-    registramos "skip" na coluna `problema`.
-    """
-    skip = bool(order_info.get("skip"))
     problema = infer_problema(buyer_only)
-    if not problema and not skip:
+    if not problema:
         return
 
     _ensure_header()
     ultima_msg = buyer_only[-1].strip().replace("\n", " ") if buyer_only else ""
-
-    if skip and not problema:
-        problema = "skip"
 
     row = [
         datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -107,6 +96,8 @@ def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
 
     with CSV_PATH.open("a", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow(row)
+
+    export_to_excel()
 
 
 def append_label(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
