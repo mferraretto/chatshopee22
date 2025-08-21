@@ -3,6 +3,7 @@ import asyncio
 from pathlib import Path
 from .duoke import DuokeBot
 from .classifier import decide_reply
+from .cases import export_to_excel
 
 STATE_FILE = Path(__file__).resolve().parents[1] / "storage_state.json"
 
@@ -25,6 +26,10 @@ async def main():
         return should, reply
 
     await bot.run_once(debug_reply)
+    try:
+        export_to_excel()
+    except Exception as e:
+        print(f"[RUN_ONCE] falha ao exportar planilha: {e}")
 
 
 if __name__ == "__main__":
