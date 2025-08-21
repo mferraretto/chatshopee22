@@ -15,7 +15,11 @@ from playwright.async_api import (
 )
 from .config import settings
 from .classifier import RESP_FALLBACK_CURTO
-from .cases import append_row as log_case, append_label as log_label
+from .cases import (
+    append_row as log_case,
+    append_label as log_label,
+    infer_problema,
+)
 
 # Carrega seletores configuráveis
 SEL = json.loads(
@@ -135,6 +139,8 @@ class DuokeBot:
         self.pause_event.set()
         # Registro de última resposta por conversa
         self.last_replied_at: dict[str, float] = {}
+        # Armazena respostas já enviadas por conversa para evitar duplicatas
+        self.sent_replies: dict[str, set[str]] = {}
 
     # ---------- infra de navegador ----------
 
@@ -1009,6 +1015,8 @@ class DuokeBot:
                 continue
 
             buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
+            problema = infer_problema(buyer_only)
+            wants_parts = bool(buyer_only) and buyer_wants_missing_parts(buyer_only[-1])
 
             # Se a última mensagem do vendedor foi o texto de "quebra_com_foto"
             # e o cliente respondeu em seguida, apenas registramos a conversa
@@ -1050,6 +1058,18 @@ class DuokeBot:
                 )
                 continue
 
+            if problema in {"reembolso parcial", "enviar peça faltante", "enviar nova peça"} or wants_parts:
+                try:
+                    log_case(order_info, buyer_only)
+                except Exception as e:
+                    print(f"[DEBUG] falha ao registrar atendimento: {e}")
+                try:
+                    log_label(order_info, buyer_only)
+                except Exception as e:
+                    print(f"[DEBUG] falha ao registrar pedido: {e}")
+                print("[DEBUG] conversa registrada (pendência manual)")
+                continue
+
             # ----- classificador / decisão -----
             should = False
             reply = ""
@@ -1082,21 +1102,17 @@ class DuokeBot:
                 print("[DEBUG] conversa registrada (skip)")
                 continue
 
-            if buyer_only and buyer_wants_missing_parts(buyer_only[-1]):
-                try:
-                    log_case(order_info, buyer_only)
-                except Exception as e:
-                    print(f"[DEBUG] falha ao registrar atendimento: {e}")
-                try:
-                    log_label(order_info, buyer_only)
-                except Exception as e:
-                    print(f"[DEBUG] falha ao registrar pedido: {e}")
-                print("[DEBUG] conversa registrada (quer peças faltantes)")
-
             if order_info.get("orderId") and "{ORDER_ID}" in reply:
                 reply = reply.replace("{ORDER_ID}", order_info["orderId"])
 
+            conv_sent = self.sent_replies.setdefault(conv_key, set())
+            norm_reply = re.sub(r"\s+", " ", (reply or "").strip().lower())
+            if norm_reply in conv_sent:
+                print("[DEBUG] resposta já enviada anteriormente nesta conversa; pulando.")
+                continue
+
             await self.send_reply(page, reply)
+            conv_sent.add(norm_reply)
             self.last_replied_at[conv_key] = now
             await page.wait_for_timeout(
                 int(getattr(settings, "delay_between_actions", 1.0) * 1000)
