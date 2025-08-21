@@ -53,15 +53,30 @@
     "match": { "any_contains": ["pedido parado", "não anda", "não atualiza", "sem movimentação", "ta parado"] },
     "reply": "Sinto muito pelo problema com a entrega, entendo o quanto isso pode ser frustrante. Infelizmente, como a Shopee é responsável pelo envio, não tenho controle direto sobre a situação, mas estou aqui para ajudar no que for possível!\n\nJá abri um chamado reforçando a urgência do seu caso. Além disso, você pode entrar em contato diretamente com o suporte da Shopee pelo app, na seção 'Ajuda'."
   },
-  {
-    "id": "cilindro_pequeno",
-    "active": true,
-    "match": {
-      "any_contains": ["cilindro pequeno", "cilindro não é grande", "cilindro errado", "cilindros compactos", "trio compacto"],
-      "none_contains": ["arco", "arcos", "painel", "painel pequeno", "painel grande", "arco de balão", "arco menor", "diâmetro do arco"]
+    {
+      "id": "cilindro_pequeno",
+      "active": true,
+      "match": {
+        "any_contains": [
+          "cilindro pequeno",
+          "cilindro não é grande",
+          "cilindro errado",
+          "cilindros compactos",
+          "trio compacto"
+        ],
+        "none_contains": [
+          "arco",
+          "arcos",
+          "painel",
+          "painel pequeno",
+          "painel grande",
+          "arco de balão",
+          "arco menor",
+          "diâmetro do arco"
+        ]
+      },
+      "reply": "Boa tarde! Tudo bem? Poxa, sinto muito pela confusão. Esse anúncio é referente ao trio compacto (3 peças menores), como mostramos na descrição e nas imagens com as medidas. Para alcançar o tamanho padrão, muitos clientes usam 2 trios compactos. Se quiser completar, posso te oferecer 25% de desconto no segundo trio!"
     },
-    "reply": "Boa tarde! Tudo bem? Poxa, sinto muito pela confusão. Esse anúncio é referente ao trio compacto (3 peças menores), como mostramos na descrição e nas imagens com as medidas. Para alcançar o tamanho padrão, muitos clientes usam 2 trios compactos. Se quiser completar, posso te oferecer 25% de desconto no segundo trio!"
-  },
   {
     "id": "pix_pendente",
     "active": true,

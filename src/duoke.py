@@ -58,8 +58,8 @@ NOISE = ("FAQ History", "[The referenced message cannot be found]")
 ALL_ITEMS_SEL = "ul.message_main li[class*='lt'], ul.message_main li[class*='rt']"
 
 MESSAGES_CONTAINER_SEL = SEL.get(
-    "messages_container",
-    "ul.message_main, ul.message_main.watermark_shopee",
+    "message_container",
+    SEL.get("messages_container", "ul.message_main, ul.message_main.watermark_shopee"),
 )
 STATUS_BADGE_SEL = SEL.get(
     "status_badge",
@@ -814,7 +814,7 @@ class DuokeBot:
 
         # Aguarda painel renderizar
         try:
-            if SEL.get("messages_container"):
+            if MESSAGES_CONTAINER_SEL:
                 await page.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=9000)
             await page.wait_for_function(
                 """() => {
@@ -843,13 +843,14 @@ class DuokeBot:
         """Retorna últimos N [(role,text)], role ∈ {'buyer','seller'}."""
         out: list[tuple[str, str]] = []
         try:
-            items = page.locator("ul.message_main > li")
+            # >>> usar o frame do chat
+            f = await get_chat_frame(page)
 
-            # Força mais histórico: rola ao topo algumas vezes
+            items = f.locator("ul.message_main > li")
+
+            # força histórico rolando o container DENTRO do frame
             try:
-                container = page.locator(
-                    SEL.get("messages_container", "ul.message_main")
-                ).first
+                container = f.locator(MESSAGES_CONTAINER_SEL).first
                 for _ in range(3):
                     await container.evaluate("(el) => { el.scrollTop = 0; }")
                     await page.wait_for_timeout(120)
@@ -867,7 +868,7 @@ class DuokeBot:
                 }).filter(Boolean)
             """
             )
-            out = texts[-depth:]
+            out = texts[max(0, len(texts) - depth) :]
         except Exception:
             pass
         return out
@@ -1280,10 +1281,7 @@ class DuokeBot:
 
         # Garante que o filtro "precisa responder" seja removido quando queremos
         # responder mesmo que a última mensagem seja do vendedor
-        if RESPONDER_MESMO_SE_ULTIMA_FOR_SELLER:
-            await self.show_all_conversations(page)
-        else:
-            await self.apply_needs_reply_filter(page)
+        await self.show_all_conversations(page)
 
         max_convs = int(getattr(settings, "max_conversations", 0) or 0)
         i = -1
@@ -1291,7 +1289,7 @@ class DuokeBot:
             i += 1
             await self.pause_event.wait()
             try:
-                if SEL.get("messages_container"):
+                if MESSAGES_CONTAINER_SEL:
                     await page.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=9000)
                 await page.wait_for_function(
                     """() => {
