@@ -15,7 +15,7 @@ from playwright.async_api import (
 )
 from .config import settings
 from .classifier import RESP_FALLBACK_CURTO
-from .cases import append_row as log_case
+from .cases import append_row as log_case, append_label as log_label
 
 # Carrega seletores configuráveis
 SEL = json.loads(
@@ -680,73 +680,6 @@ class DuokeBot:
         except Exception:
             pass
 
-    async def apply_label(self, page, label_name: str = "gpt") -> bool:
-        """Abre o modal de etiquetas, seleciona a etiqueta `label_name` e confirma."""
-        timeout = settings.goto_timeout_ms
-        try:
-            # 1) Botão correto no cabeçalho do painel direito
-            btn_sel = SEL.get(
-                "tag_button",
-                ".cont_header .contact_action_icon:has(i.icon_mark_1), .contact_action .contact_action_icon:has(i.icon_mark_1)",
-            )
-
-            btn = page.locator(btn_sel).locator(":visible").first
-            await btn.scroll_into_view_if_needed()
-            await btn.wait_for(state="visible", timeout=timeout)
-            await btn.click()
-
-            # 2) Modal de etiquetas
-            modal_sel = SEL.get(
-                "tag_modal",
-                ".el-dialog.select_label_dialog, .el-dialog__wrapper:has(.label_item)",
-            )
-            modal = page.locator(modal_sel).first
-            await modal.wait_for(state="visible", timeout=timeout)
-
-            # 3) Clicar na etiqueta pelo texto
-            item_sel = SEL.get("tag_item", "span.label_item_name")
-            tag_span = modal.locator(item_sel, has_text=label_name).first
-            await tag_span.scroll_into_view_if_needed()
-            await tag_span.click()
-
-            # 4) Validar que o card ficou ativo
-            tag_card = tag_span.locator(
-                "xpath=ancestor::div[contains(@class,'label_item')]"
-            ).first
-            try:
-                await tag_card.wait_for(state="attached", timeout=timeout)
-                await page.wait_for_function(
-                    """(el) => el.classList.contains('active')""",
-                    arg=await tag_card.element_handle(),
-                    timeout=timeout,
-                )
-            except PWTimeoutError:
-                await tag_span.click()
-                await page.wait_for_function(
-                    """(el) => el.classList.contains('active')""",
-                    arg=await tag_card.element_handle(),
-                    timeout=timeout,
-                )
-
-            # 5) Confirmar e aguardar fechar
-            confirm_btn = modal.locator(
-                "button.el-button.el-button--primary",
-                has_text="Confirm",
-            ).first
-            if await confirm_btn.count() == 0:
-                confirm_btn = modal.locator(
-                    "div.el-dialog__footer button.el-button.el-button--primary"
-                ).first
-
-            await confirm_btn.scroll_into_view_if_needed()
-            await confirm_btn.click()
-            await modal.wait_for(state="hidden", timeout=timeout)
-
-            return True
-        except Exception as e:
-            print(f"[DEBUG] apply_label falhou: {e}")
-            return False
-
     # ---------- ações manuais de login/2FA ----------
 
     async def close_modal(self, page, retries: int = 3):
@@ -1082,6 +1015,10 @@ class DuokeBot:
                     log_case(order_info, buyer_only)
                 except Exception as e:
                     print(f"[DEBUG] falha ao registrar atendimento: {e}")
+                try:
+                    log_label(order_info, buyer_only)
+                except Exception as e:
+                    print(f"[DEBUG] falha ao registrar pedido: {e}")
                 print("[DEBUG] conversa registrada (skip)")
                 continue
 
@@ -1090,6 +1027,10 @@ class DuokeBot:
                     log_case(order_info, buyer_only)
                 except Exception as e:
                     print(f"[DEBUG] falha ao registrar atendimento: {e}")
+                try:
+                    log_label(order_info, buyer_only)
+                except Exception as e:
+                    print(f"[DEBUG] falha ao registrar pedido: {e}")
                 print("[DEBUG] conversa registrada (quer peças faltantes)")
 
             if order_info.get("orderId") and "{ORDER_ID}" in reply:

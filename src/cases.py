@@ -9,6 +9,7 @@ DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 CSV_PATH = DATA_DIR / "atendimentos.csv"
 XLSX_PATH = DATA_DIR / "atendimentos.xlsx"
+LABEL_CSV_PATH = DATA_DIR / "etiquetas.csv"
 
 HEADER = [
     "timestamp_utc",
@@ -22,12 +23,26 @@ HEADER = [
     "ultima_msg_comprador",
 ]
 
+LABEL_HEADER = [
+    "order_id",
+    "buyer_name",
+    "produto",
+    "sku",
+    "mensagem_comprador",
+]
+
 
 def _ensure_header():
     if not CSV_PATH.exists():
         with CSV_PATH.open("w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow(HEADER)
+
+
+def _ensure_label_header():
+    if not LABEL_CSV_PATH.exists():
+        with LABEL_CSV_PATH.open("w", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(LABEL_HEADER)
 
 
 TRIGGERS = {
@@ -83,6 +98,21 @@ def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
         csv.writer(f).writerow(row)
 
     export_to_excel()
+
+
+def append_label(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
+    """Salva informações básicas de pedidos que receberiam etiqueta."""
+    _ensure_label_header()
+    ultima_msg = buyer_only[-1].strip().replace("\n", " ") if buyer_only else ""
+    row = [
+        order_info.get("orderId", ""),
+        order_info.get("buyer_name", ""),
+        order_info.get("title", ""),
+        order_info.get("sku", ""),
+        ultima_msg,
+    ]
+    with LABEL_CSV_PATH.open("a", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerow(row)
 
 
 def export_to_excel() -> None:
