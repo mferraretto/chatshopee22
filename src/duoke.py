@@ -15,75 +15,7 @@ from playwright.async_api import (
 )
 from .config import settings
 from .classifier import RESP_FALLBACK_CURTO
-from .cases import (
-    append_row as log_case,
-    save_conversation_snapshot,
-    mark_conversation_skipped,
-)
-
-
-def normalize_selectors(SEL: dict) -> dict:
-    S = dict(SEL)
-
-    S.setdefault(
-        "messages_container",
-        SEL.get("message_container", "ul.message_main, ul.message_main.watermark_shopee"),
-    )
-
-    S.setdefault(
-        "buyer_bubbles",
-        SEL.get(
-            "buyer_message",
-            "ul.message_main li.lt .msg_text .text_cont, ul.message_main li.lt .text_cont",
-        ),
-    )
-    S.setdefault("buyer_bubbles_fallback", "ul.message_main li.lt .text_cont")
-
-    S.setdefault(
-        "seller_bubbles",
-        SEL.get(
-            "seller_message",
-            "ul.message_main li.rt .msg_text .text_cont, ul.message_main li.rt .text_cont",
-        ),
-    )
-    S.setdefault("seller_bubbles_fallback", "ul.message_main li.rt .text_cont")
-
-    S.setdefault(
-        "chat_list_item",
-        ".list_container_content .virtual_list .list > li, .contact_list .virtual_list .list > li, ul.chat_list > li",
-    )
-    S.setdefault(
-        "chat_list_root",
-        ".list_container_content .virtual_list, .contact_list .virtual_list, ul.chat_list",
-    )
-
-    S.setdefault("status_badge", SEL.get("order_status_tag", "div.order_item_status .el-tag"))
-
-    S.setdefault("order_items_root", "div.order_item_products")
-    S.setdefault("order_item", "div.order_item_products_item")
-    S.setdefault("item_title", SEL.get("product_title", ".order_item_products .product_url"))
-    S.setdefault(
-        "item_variation",
-        SEL.get("product_variation", ".order_item_products_item_info_variation_name span"),
-    )
-    S.setdefault("item_sku", SEL.get("product_sku", ".order_item_products_item_info_sku span"))
-    S.setdefault(
-        "item_price_block",
-        SEL.get("product_price", ".product_other_info > div:nth-child(1)"),
-    )
-    S.setdefault(
-        "item_qty_block",
-        SEL.get(
-            "product_qty",
-            ".product_other_info > div:nth-child(2), .product_other_info > div:nth-child(3)",
-        ),
-    )
-
-    S.setdefault("input_textarea", "textarea, [contenteditable='true']")
-    S.setdefault("send_button", "button:has-text('Send'), button:has-text('Enviar')")
-
-    return S
-
+from .cases import append_row as log_case
 
 # Carrega seletores configuráveis
 SEL = json.loads(
@@ -91,138 +23,11 @@ SEL = json.loads(
         encoding="utf-8"
     )
 )
-SEL = normalize_selectors(SEL)
-
-
-def load_rules(path: Path) -> dict:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception as e:
-        print(f"[WARN] rules.json inválido: {e}. Usando defaults.")
-        return {
-            "reply_when_no_buyer_msgs": True,
-            "skip_if_prior_offer_and_no_buyer_reply": True,
-        }
-
-
-RULES_CFG = load_rules(Path(__file__).resolve().parents[1] / "rules.json")
-REPLY_WHEN_NO_BUYER_MSGS = RULES_CFG.get("reply_when_no_buyer_msgs", True)
-PULAR_QUANDO_JA_HOUVE_OFERTA_SEM_RESPOSTA_DO_COMPRADOR = RULES_CFG.get(
-    "skip_if_prior_offer_and_no_buyer_reply", True
-)
-
-
-def dbg(tag, data):
-    try:
-        print(f"[DEBUG] {tag}: {data}")
-    except Exception as e:
-        print(f"[DEBUG] {tag}: <unprintable> {e}")
-
-
-
-THREAD_LIST_SEL = SEL["chat_list_root"]
-THREAD_ROW_SEL = SEL["chat_list_item"]
-UNREAD_BADGE_SEL = ".unread, .red_point, .badge"
-
-TS_ONLY_RE = re.compile(r"^\d{2}/\d{2}\s+\d{2}:\d{2}$")
-NOISE = ("FAQ History", "[The referenced message cannot be found]")
-ALL_ITEMS_SEL = "ul.message_main li[class*='lt'], ul.message_main li[class*='rt']"
-
-MESSAGES_CONTAINER_SEL = SEL["messages_container"]
-STATUS_BADGE_SEL = SEL["status_badge"]
 
 WANTS_PARTS_RE = re.compile(
     r"(quero|prefiro|pode|manda|mandar|envia|enviar|me envia|me mandar).{0,25}(peça|peças|pecas|as peças|as pecas|a peça|a peca)",
     re.I,
 )
-
-
-async def get_current_conversation_id(page) -> str:
-    for sel in [
-        "div.order_header :text('Order ID')",
-        "div.order_item_products_item_info_title_name_url .product_url",
-        "div.chat_header .account_name",
-    ]:
-        try:
-            t = await page.text_content(sel)
-            if t and t.strip():
-                return t.strip()
-        except Exception:
-            pass
-    return ""
-
-
-async def safe_open_thread_by_index(page, i: int) -> bool:
-    rows = page.locator(THREAD_ROW_SEL)
-    row = rows.nth(i)
-
-    await row.scroll_into_view_if_needed()
-    await row.wait_for(state="visible", timeout=8000)
-
-    try:
-        await row.locator("a[href]").evaluate_all(
-            "(as)=>as.forEach(a=>{a.removeAttribute('href');a.removeAttribute('target');})"
-        )
-    except Exception:
-        pass
-
-    url_before = page.url
-    conv_before = await get_current_conversation_id(page)
-
-    try:
-        await row.click(no_wait_after=True)
-    except Exception as e:
-        print(f"[DEBUG] safe_open_thread_by_index click error: {e}")
-        return False
-
-    for _ in range(20):
-        await page.wait_for_timeout(150)
-        conv_after = await get_current_conversation_id(page)
-        if conv_after and conv_after != conv_before and page.url == url_before:
-            return True
-
-    if page.url != url_before:
-        try:
-            await page.go_back()
-            await page.wait_for_timeout(300)
-        except Exception:
-            pass
-    print("[DEBUG] conversa não trocou ao clicar no índice", i)
-    return False
-
-
-async def iterate_threads(page, max_threads=300):
-    await page.wait_for_selector(THREAD_ROW_SEL, timeout=15000)
-    seen_ids: set[str] = set()
-    idx = 0
-    rows = page.locator(THREAD_ROW_SEL)
-    while idx < max_threads:
-        count = await rows.count()
-        if idx >= count:
-            try:
-                await page.locator(THREAD_LIST_SEL).first.evaluate(
-                    "el => el.scrollTop = el.scrollHeight"
-                )
-            except Exception:
-                await page.eval_on_selector(
-                    THREAD_LIST_SEL, "el => el.scrollTop = el.scrollHeight"
-                )
-            await page.wait_for_timeout(500)
-            count = await rows.count()
-            if idx >= count:
-                break
-        ok = await safe_open_thread_by_index(page, idx)
-        if not ok:
-            idx += 1
-            continue
-        conv_id = await get_current_conversation_id(page)
-        if conv_id in seen_ids:
-            idx += 1
-            continue
-        seen_ids.add(conv_id)
-        print("[DEBUG] >>> Conversa aberta:", conv_id)
-        yield conv_id
-        idx += 1
 
 
 def buyer_wants_missing_parts(text: str) -> bool:
@@ -242,222 +47,6 @@ def buyer_wants_missing_parts(text: str) -> bool:
         "prefiro receber a peça",
     ]
     return any(s in t for s in simples)
-
-
-def _clean(t: str) -> str:
-    t = (t or "").replace("\u200b", "").strip()
-    return re.sub(r"\s+", " ", t)
-
-
-def _parse_money_br(txt: str) -> float:
-    txt = _clean(txt)
-    if not txt:
-        return 0.0
-    num = re.sub(r"[^0-9,]", "", txt)
-    num = num.replace(".", "").replace(",", ".")
-    try:
-        return float(num)
-    except ValueError:
-        return 0.0
-
-
-def _parse_qty(txt: str) -> int:
-    txt = _clean(txt)
-    m = re.search(r"(\d+)", txt)
-    return int(m.group(1)) if m else 0
-
-
-async def _all_texts(page, selector: str) -> list[str]:
-    if not selector:
-        return []
-    try:
-        texts = await page.eval_on_selector_all(
-            selector, "nodes => nodes.map(n => n.textContent || '').filter(Boolean)"
-        )
-        if texts:
-            return texts
-    except Exception as e:
-        dbg("eval_on_selector_all.error", f"{selector} -> {e}")
-
-    try:
-        nodes = await page.query_selector_all(selector)
-        out = []
-        for n in nodes:
-            t = await n.text_content()
-            if t:
-                out.append(t)
-        return out
-    except Exception as e:
-        dbg("query_selector_all.error", f"{selector} -> {e}")
-        return []
-
-
-
-# ----- Novas rotinas de leitura de mensagens -----
-
-async def get_chat_frame(page):
-    if await page.locator(MESSAGES_CONTAINER_SEL).count():
-        return page
-    for f in page.frames:
-        try:
-            if await f.locator(MESSAGES_CONTAINER_SEL).count():
-                return f
-        except Exception:
-            pass
-    return page
-
-
-async def ensure_messages_rendered(frame):
-    try:
-        await frame.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=12000)
-    except Exception:
-        return
-    await frame.eval_on_selector(MESSAGES_CONTAINER_SEL, "el => el.scrollTop = el.scrollHeight")
-    await frame.wait_for_timeout(250)
-
-
-async def _bubble_text_from_li(li) -> str:
-    for sel in (".msg_cont .msg_text .text_cont", ".text_cont", ".quote_content_wrap_new"):
-        node = li.locator(sel).first
-        if await node.count() > 0:
-            t = _clean(await node.text_content() or "")
-            if t and not TS_ONLY_RE.match(t) and not any(n.lower() in t.lower() for n in NOISE):
-                return t
-    t = _clean(await li.text_content() or "")
-    t = re.sub(r"\b\d{2}/\d{2}\s+\d{2}:\d{2}\b", "", t).strip()
-    if t and not any(n.lower() in t.lower() for n in NOISE):
-        return t
-    return ""
-
-
-async def get_timeline(page, limit=120) -> list[dict]:
-    f = await get_chat_frame(page)
-    await ensure_messages_rendered(f)
-    loc = f.locator(ALL_ITEMS_SEL)
-    n = await loc.count()
-    out = []
-    for i in range(max(0, n - limit), n):
-        li = loc.nth(i)
-        klass = (await li.get_attribute("class")) or ""
-        role = "buyer" if "lt" in klass else "seller"
-        try:
-            text = await _bubble_text_from_li(li)
-        except Exception as e:
-            print("[ERROR] bubble_extract:", e)
-            text = ""
-        if text:
-            out.append({"role": role, "text": text})
-    dbg("timeline_last", out[-6:])
-    return out
-
-
-async def get_last_buyer_texts(page, limit=20) -> list[str]:
-    tl = await get_timeline(page, 200)
-    buyer = [m["text"] for m in tl if m["role"] == "buyer"]
-    dbg("buyer_last", buyer[-limit:])
-    return buyer[-limit:]
-
-
-async def get_last_seller_texts(page, limit=30) -> list[str]:
-    tl = await get_timeline(page, 200)
-    seller = [m["text"] for m in tl if m["role"] == "seller"]
-    dbg("seller_last", seller[-limit:])
-    return seller[-limit:]
-
-
-OFFER_RE = re.compile(
-    r"(reembols\w+|estorno|troca(r|remos)?|efetuar\s+a?\s*troca|reenviar|reenvio|enviar\s+(a\s+)?pe(ç|c)a\s+(faltante|que\s+faltou)|devolu(c|ç)ão)",
-    re.I,
-)
-
-
-def seller_offered_resolution(msgs: list[str]) -> bool:
-    return bool(OFFER_RE.search(" \n ".join(msgs)))
-
-
-def buyer_after_offer(timeline: list[dict]) -> bool:
-    last_offer = None
-    for i, m in enumerate(timeline):
-        if m["role"] == "seller" and OFFER_RE.search(m["text"]):
-            last_offer = i
-    if last_offer is None:
-        return False
-    return any(m["role"] == "buyer" for m in timeline[last_offer + 1 :])
-
-
-STATUS_RANK = {
-    "cancelled": 100,
-    "completed": 90,
-    "ready to ship": 60,
-    "to ship": 50,
-    "to pack": 40,
-    "to pay": 10,
-}
-
-
-def _norm_status(s: str) -> str:
-    s = (s or "").lower()
-    if "cancel" in s:
-        return "cancelled"
-    if "complete" in s or "deliver" in s:
-        return "completed"
-    if "ready to ship" in s:
-        return "ready to ship"
-    if "to ship" in s:
-        return "to ship"
-    if "to pack" in s:
-        return "to pack"
-    if "to pay" in s:
-        return "to pay"
-    return "unknown"
-
-
-async def get_status_consolidated(page) -> str:
-    try:
-        badges = await _all_texts(page, STATUS_BADGE_SEL)
-    except Exception as e:
-        dbg("status_badge.error", e)
-        badges = []
-    mapped = [_norm_status(x) for x in badges]
-    status = max(mapped, key=lambda x: STATUS_RANK.get(x, 0)) if mapped else "unknown"
-    dbg("status_consolidated", status)
-    return status
-
-
-async def get_order_items(page) -> list[dict]:
-    await page.wait_for_selector(SEL["order_items_root"], timeout=15000)
-    items = []
-    for h in await page.query_selector_all(SEL["order_item"]):
-        title = await h.eval_on_selector(
-            SEL["item_title"],
-            "el => el.textContent || ''",
-        )
-        variation = await h.eval_on_selector(
-            SEL["item_variation"],
-            "el => el.getAttribute('title') || el.textContent || ''",
-        )
-        sku = await h.eval_on_selector(
-            SEL["item_sku"],
-            "el => el.getAttribute('title') || el.textContent || ''",
-        )
-        price_txt = await h.eval_on_selector(
-            SEL["item_price_block"],
-            "el => el.textContent || ''",
-        )
-        qty_txt = await h.eval_on_selector(
-            SEL["item_qty_block"],
-            "el => el.textContent || ''",
-        )
-        items.append(
-            {
-                "title": _clean(title),
-                "variation": _clean(variation),
-                "sku": _clean(sku),
-                "price": _parse_money_br(price_txt),
-                "qty": _parse_qty(qty_txt),
-            }
-        )
-    return items
 
 
 # Botões de confirmação comuns em modais (várias línguas)
@@ -656,7 +245,7 @@ class DuokeBot:
         visíveis.
         """
         chat_list_container = SEL.get("chat_list_container", "")
-        chat_list_item = SEL["chat_list_item"]
+        chat_list_item = SEL.get("chat_list_item", "ul.chat_list li")
         try:
             if chat_list_container:
                 sel = f"{chat_list_container}, {chat_list_item}, ul.message_main"
@@ -779,7 +368,7 @@ class DuokeBot:
         # Caso contrário, espera o chat aparecer
         try:
             chat_list_container = SEL.get("chat_list_container", "")
-            chat_list_item = SEL["chat_list_item"]
+            chat_list_item = SEL.get("chat_list_item", "ul.chat_list li")
             if chat_list_container:
                 await page.wait_for_selector(
                     f"{chat_list_container}, {chat_list_item}, ul.message_main",
@@ -867,7 +456,7 @@ class DuokeBot:
     # ---------- navegação entre conversas ----------
 
     def conversations(self, page):
-        return page.locator(SEL["chat_list_item"])
+        return page.locator(SEL.get("chat_list_item", "ul.chat_list li"))
 
     async def open_conversation_by_index(self, page, idx: int) -> bool:
         conv_locator = self.conversations(page)
@@ -879,9 +468,9 @@ class DuokeBot:
 
         # Aguarda painel renderizar
         try:
-            f = await get_chat_frame(page)
-            await f.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=9000)
-            await f.wait_for_function(
+            if SEL.get("message_container"):
+                await page.wait_for_selector(SEL["message_container"], timeout=9000)
+            await page.wait_for_function(
                 """() => {
                     const ul = document.querySelector('ul.message_main');
                     return ul && ul.children && ul.children.length > 0;
@@ -893,7 +482,7 @@ class DuokeBot:
 
         try:
             if SEL.get("input_textarea"):
-                await page.wait_for_selector(SEL.get("input_textarea", ""), timeout=8000)
+                await page.wait_for_selector(SEL["input_textarea"], timeout=8000)
         except Exception:
             pass
 
@@ -908,42 +497,60 @@ class DuokeBot:
         """Retorna últimos N [(role,text)], role ∈ {'buyer','seller'}."""
         out: list[tuple[str, str]] = []
         try:
-            f = await get_chat_frame(page)
-            items = f.locator("ul.message_main > li")
+            items = page.locator("ul.message_main > li")
 
-            container = f.locator(SEL["messages_container"]).first
-            if await container.count():
+            # Força mais histórico: rola ao topo algumas vezes
+            try:
+                container = page.locator(
+                    SEL.get("message_container", "ul.message_main")
+                ).first
                 for _ in range(3):
                     await container.evaluate("(el) => { el.scrollTop = 0; }")
                     await page.wait_for_timeout(120)
+            except Exception:
+                pass
 
             texts = await items.evaluate_all(
                 """
-          (els) => els.map(li => {
-            const cls = (li.className||'').toLowerCase();
-            const role = cls.includes('lt') ? 'buyer' : (cls.includes('rt') ? 'seller' : 'system');
-            const node = li.querySelector('div.msg_cont div.msg_text div.text_cont, .text_cont, .bubble .text, .record_item .content');
-            const raw = (node?.innerText || '').trim();
-            if (!raw) return null;
-            if (/^\d{2}\/\d{2}\s+\d{2}:\d{2}$/.test(raw)) return null;
-            if (raw.includes('FAQ History') || raw.includes('[The referenced message cannot be found]')) return null;
-            return role !== 'system' ? [role, raw] : null;
-          }).filter(Boolean)
+                (els) => els.map(li => {
+                    const cls = (li.className || '').toLowerCase();
+                    const role = cls.includes('lt') ? 'buyer' : (cls.includes('rt') ? 'seller' : 'system');
+                    const txtNode = li.querySelector('div.text_cont, .bubble .text, .record_item .content');
+                    const txt = (txtNode?.innerText || '').trim();
+                    return txt && role !== 'system' ? [role, txt] : null;
+                }).filter(Boolean)
             """
             )
-            out = texts.slice(Math.max(0, texts.length - depth))
+            out = texts[-depth:]
         except Exception:
             pass
         return out
 
     async def read_messages(self, page, depth: int = 8) -> list[str]:
         """Compat: apenas textos do comprador."""
-        try:
-            msgs = await get_last_buyer_texts(page, limit=depth)
-            print(f"[DEBUG] Mensagens do cliente encontradas: {len(msgs)}")
+        msgs: list[str] = []
+        container = page.locator(SEL.get("message_container", "ul.message_main")).first
+        if not await container.count():
+            print("[DEBUG] Nenhum container de mensagens encontrado")
             return msgs
+
+        for _ in range(3):
+            try:
+                await container.evaluate("(el) => { el.scrollTop = 0; }")
+                await page.wait_for_timeout(60)
+            except Exception:
+                break
+
+        buyer_sel = SEL.get("buyer_message", "ul.message_main li.lt .text_cont")
+        try:
+            nodes = page.locator(buyer_sel)
+            msgs = await nodes.evaluate_all(
+                "(els) => els.map(el => (el.innerText || '').trim()).filter(Boolean)"
+            )
+            print(f"[DEBUG] Mensagens do cliente encontradas: {len(msgs)}")
+            return msgs[-depth:]
         except Exception as e:
-            print(f"[DEBUG] erro ao extrair mensagens: {e}")
+            print(f"[DEBUG] erro ao extrair mensagens com evaluate_all: {e}")
             return []
 
     # ---------- painel lateral (pedido) ----------
@@ -1028,7 +635,6 @@ class DuokeBot:
     # ---------- envio de resposta ----------
 
     async def send_reply(self, page, text: str):
-        print(f"[DEBUG] Enviando resposta: {text}")
         candidates = [
             s.strip() for s in SEL.get("input_textarea", "").split(",") if s.strip()
         ]
@@ -1267,10 +873,10 @@ class DuokeBot:
     async def get_order_bits(page):
         """Lê status/desc/track + produto/variação/SKU do painel direito usando SEL."""
         status_tag = await DuokeBot._text_or_empty(
-            page.locator(SEL["status_badge"])
+            page.locator(SEL["order_status_tag"])
         )
 
-        log_status_el = page.locator(SEL.get("logistics_status", ""))
+        log_status_el = page.locator(SEL["logistics_status"])
         logistics_status = ""
         if await log_status_el.count():
             logistics_status = (await log_status_el.first().get_attribute("title")) or (
@@ -1279,14 +885,14 @@ class DuokeBot:
             logistics_status = (logistics_status or "").strip()
 
         latest_desc = await DuokeBot._text_or_empty(
-            page.locator(SEL.get("latest_logistics_description", ""))
+            page.locator(SEL["latest_logistics_description"])
         )
-        tracking = await DuokeBot._text_or_empty(page.locator(SEL.get("tracking_number", "")))
-        product = await DuokeBot._text_or_empty(page.locator(SEL["item_title"]))
+        tracking = await DuokeBot._text_or_empty(page.locator(SEL["tracking_number"]))
+        product = await DuokeBot._text_or_empty(page.locator(SEL["product_title"]))
         variation = await DuokeBot._text_or_empty(
-            page.locator(SEL["item_variation"])
+            page.locator(SEL["product_variation"])
         )
-        sku = await DuokeBot._text_or_empty(page.locator(SEL["item_sku"]))
+        sku = await DuokeBot._text_or_empty(page.locator(SEL["product_sku"]))
 
         status_consolidado = (
             status_tag or logistics_status or latest_desc or "desconhecido"
@@ -1305,18 +911,18 @@ class DuokeBot:
 
     @staticmethod
     async def get_review_text(page):
-        stars = page.locator(SEL.get("review_stars", ""))
+        stars = page.locator(SEL["review_stars"])
         if not await stars.count():
             return ""
         try:
             await stars.first().hover()
-            popup = page.locator(SEL.get("review_text", ""))
+            popup = page.locator(SEL["review_text"])
             await popup.first().wait_for(state="visible", timeout=9000)
             return (await popup.first().inner_text() or "").strip()
         except Exception:
             try:
                 await stars.first().click()
-                popup = page.locator(SEL.get("review_text", ""))
+                popup = page.locator(SEL["review_text"])
                 await popup.first().wait_for(state="visible", timeout=9000)
                 return (await popup.first().inner_text() or "").strip()
             except Exception:
@@ -1342,24 +948,24 @@ class DuokeBot:
             await asyncio.sleep(1)
             return
 
-        # Sempre lista todas as conversas para processar mesmo que a última seja do vendedor
+        # Garante que conversas cujo último envio foi do vendedor também apareçam
         await self.show_all_conversations(page)
 
+        conv_locator = self.conversations(page)
+        await page.wait_for_timeout(300)
+        total = await conv_locator.count()
+        print(f"[DEBUG] conversas visíveis: {total}")
+
         max_convs = int(getattr(settings, "max_conversations", 0) or 0)
-        i = -1
-        async for _ in iterate_threads(page, max_threads=max_convs or 300):
-            i += 1
+        if max_convs > 0:
+            total = min(total, max_convs)
+
+        for i in range(total):
             await self.pause_event.wait()
             try:
-                f = await get_chat_frame(page)
-                await f.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=9000)
-                await f.wait_for_function(
-                    """() => {
-                    const ul = document.querySelector('ul.message_main');
-                    return ul && ul.children && ul.children.length > 0;
-                }""",
-                    timeout=9000,
-                )
+                ok = await self.open_conversation_by_index(page, i)
+                if not ok:
+                    continue
             except Exception as e:
                 print(f"[DEBUG] falha ao abrir conversa {i}: {e}")
                 continue
@@ -1397,61 +1003,17 @@ class DuokeBot:
                 )
                 order_info["logistics_latest_desc"] = latest_desc
 
-                try:
-                    order_info["status_consolidado"] = await get_status_consolidated(page)
-                except Exception:
-                    pass
-                try:
-                    order_info["items"] = await get_order_items(page)
-                except Exception:
-                    pass
-
                 print("[DEBUG] Order info:", order_info)
             except Exception as e:
                 order_info = {}
                 print(f"[DEBUG] falha ao ler order_info: {e}")
 
             # ----- Mensagens + history -----
-            buyer_msgs = await get_last_buyer_texts(page, limit=20)
-            seller_msgs = await get_last_seller_texts(page, limit=30)
-            timeline = await get_timeline(page, limit=60)
-
-            offered = seller_offered_resolution(seller_msgs)
-            buyer_after = buyer_after_offer(timeline)
-
-            dbg("offered_resolution", offered)
-            dbg("buyer_after_offer", buyer_after)
-
-            snapshot = {
-                "order_id": order_info.get("orderId"),
-                "buyer_last_20": buyer_msgs,
-                "seller_last_30": seller_msgs,
-                "offered_resolution": offered,
-            }
-            if (
-                PULAR_QUANDO_JA_HOUVE_OFERTA_SEM_RESPOSTA_DO_COMPRADOR
-                and offered
-                and not buyer_after
-                and buyer_msgs
-            ):
-                snapshot["skipped_reason"] = "prior_offer_no_buyer_followup"
-                save_conversation_snapshot(snapshot)
-                mark_conversation_skipped(
-                    order_info.get("orderId"),
-                    reason="prior_offer_no_buyer_followup",
-                )
-                dbg("decision", "SKIP_CONVERSATION")
-                continue
-            else:
-                save_conversation_snapshot(snapshot)
-
             depth = int(getattr(settings, "history_depth", 8) or 8)
             pairs = await self.read_messages_with_roles(page, depth * 2)
             print(f"[DEBUG] conversa {i}: {len(pairs)} msgs (com role)")
-
-            print("[DEBUG] Mensagens lidas:")
-            for role, msg in pairs:
-                print(f"- {role}: {msg}")
+            if not pairs:
+                continue
 
             buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
 
@@ -1511,9 +1073,6 @@ class DuokeBot:
                 should, reply = result
             except Exception as e:
                 print(f"[DEBUG] erro no hook/classificador: {e}")
-                should, reply = True, RESP_FALLBACK_CURTO
-
-            if not buyer_only and REPLY_WHEN_NO_BUYER_MSGS:
                 should, reply = True, RESP_FALLBACK_CURTO
 
             print(f"[DEBUG] decide: should={should} | Resposta: {reply}")
