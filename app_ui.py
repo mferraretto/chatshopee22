@@ -168,11 +168,15 @@ HTML = Template(
     <section id="pane-config" style="display:none;">
       <div class="card" style="margin-bottom:16px;">
         <h3>Configurações</h3>
-        <form method="post" action="/save-settings" class="row">
-          <label>Max conversations</label><input name="max_conversations" type="number" min="0" value="{{ max_conv }}">
-          <label>History depth</label><input name="history_depth" type="number" min="1" value="{{ depth }}">
-          <label>Delay ações (s)</label><input name="delay_between_actions" type="number" step="0.1" min="0" value="{{ delay }}">
-          <label>Selector campo texto</label><input name="input_selector" type="text" value="{{ input_sel }}">
+        <form method="post" action="/save-settings" style="display:flex; flex-direction:column; gap:8px;">
+          <div class="row">
+            <label>Max conversations</label><input name="max_conversations" type="number" min="0" value="{{ max_conv }}">
+            <label>History depth</label><input name="history_depth" type="number" min="1" value="{{ depth }}">
+            <label>Delay ações (s)</label><input name="delay_between_actions" type="number" step="0.1" min="0" value="{{ delay }}">
+            <label>Selector campo texto</label><input name="input_selector" type="text" value="{{ input_sel }}">
+          </div>
+          <label>Prompt Gemini</label>
+          <textarea name="base_prompt" rows="10" style="width:100%;">{{ prompt }}</textarea>
           <button>Salvar</button>
         </form>
       </div>
@@ -443,6 +447,7 @@ async def index():
         depth=(settings.history_depth or 5),
         delay=(settings.delay_between_actions or 1.0),
         input_sel=input_default,
+        prompt=(settings.base_prompt or ""),
     )
 
 
@@ -495,11 +500,13 @@ async def save_settings(
     history_depth: int = Form(...),
     delay_between_actions: float = Form(...),
     input_selector: str = Form(...),
+    base_prompt: str = Form(...),
 ):
     # Atualiza em memória
     settings.max_conversations = max_conversations
     settings.history_depth = history_depth
     settings.delay_between_actions = delay_between_actions
+    settings.base_prompt = base_prompt
     # Atualiza selectors.json se existir
     try:
         sel_path = getattr(settings, "selectors_path", None)
@@ -512,6 +519,14 @@ async def save_settings(
             log("[UI] selectors.json atualizado (input_textarea).")
     except Exception as e:
         log(f"[UI] falha ao atualizar selectors.json: {type(e).__name__}: {e!r}")
+    # Atualiza prompt em arquivo se caminho definido
+    try:
+        prompt_path = getattr(settings, "prompt_path", None)
+        if prompt_path:
+            prompt_path.write_text(base_prompt, encoding="utf-8")
+            log("[UI] prompt atualizado.")
+    except Exception as e:
+        log(f"[UI] falha ao atualizar prompt: {type(e).__name__}: {e!r}")
     return RedirectResponse("/", status_code=303)
 
 

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
@@ -6,6 +7,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TRUE_SET = {"sim", "yes", "true", "1"}
+
+
+def _prompt_path() -> Path:
+    return Path(os.getenv("GEMINI_PROMPT_PATH", "config/prompt.txt"))
+
+
+def _prompt_text() -> str:
+    p = _prompt_path()
+    try:
+        return p.read_text(encoding="utf-8")
+    except Exception:
+        return ""
 
 
 class Settings(BaseModel):
@@ -20,6 +33,8 @@ class Settings(BaseModel):
     gemini_top_p: float = Field(
         default_factory=lambda: float(os.getenv("GEMINI_TOP_P", "0.9"))
     )
+    prompt_path: Path = Field(default_factory=_prompt_path)
+    base_prompt: str = Field(default_factory=_prompt_text)
     # single | manager_critic
     refine_mode: str = Field(
         default_factory=lambda: os.getenv("REFINE_MODE", "manager_critic")
