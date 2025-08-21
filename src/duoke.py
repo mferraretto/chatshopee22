@@ -63,6 +63,58 @@ async def safe_text(locator):
         return None
 
 
+async def extract_order_details_with_selectors(page, SEL: dict) -> Dict[str, Any]:
+    """Extrai detalhes do pedido do painel lateral usando seletores CSS específicos."""
+    details: Dict[str, Any] = {}
+
+    selector_map = {
+        "status": "status_badge",
+        "buyer_payment_amount": "buyer_payment_amount",
+        "payment_method": "payment_method",
+        "payment_time": "payment_time",
+        "shipping_provider": "shipping_provider",
+        "tracking_number": "tracking_number",
+        "logistics_status": "logistics_status",
+        "latest_logistics_description": "latest_logistics_description",
+        "logistics_update_time": "logistics_update_time",
+        "completed_time": "completed_time",
+    }
+
+    for key, selector_key in selector_map.items():
+        selector = SEL.get(selector_key)
+        if selector:
+            text_content = await safe_text(page.locator(selector))
+            if text_content:
+                details[key] = text_content
+
+    try:
+        product_info = await extract_order_from_dom(page, SEL)
+        details.update(product_info)
+    except Exception:
+        details["title"] = await safe_text(page.locator(SEL.get("item_title", "")))
+        details["variation"] = await safe_text(page.locator(SEL.get("item_variation", "")))
+        details["sku"] = await safe_text(page.locator(SEL.get("item_sku", "")))
+
+    try:
+        content = await page.locator("div.order_item_info_id").inner_text()
+        match = re.search(r"#([A-Z0-9]{10,})", content)
+        if match:
+            details["orderId"] = match.group(1)
+    except Exception:
+        pass
+
+    details.setdefault("sku", "")
+    details.setdefault("orderId", "")
+    details.setdefault("status", "")
+
+    details["status_consolidado"] = (
+        details.get("status") or details.get("logistics_status") or "desconhecido"
+    )
+    details["logistics_latest_desc"] = details.get("latest_logistics_description", "")
+
+    return details
+
+
 async def extract_order_from_dom(page, SEL: dict) -> Dict[str, Any]:
     await page.wait_for_selector(SEL["order.product_list"], state="visible", timeout=20000)
     await page.wait_for_selector(SEL["order.buyer_name"], state="visible", timeout=20000)
@@ -965,45 +1017,18 @@ class DuokeBot:
 
             await self.pause_event.wait()
 
-            # ----- Order info + status consolidado -----
+            # ----- Order info (extração precisa com seletores) -----
             order_info = {}
             try:
-                order_info = await self.read_sidebar_order_info(page)
+                order_info = await extract_order_details_with_selectors(page, SEL)
             except Exception as e:
-                print(f"[DEBUG] falha ao ler order_info: {e}")
-            try:
-                dom_info = await extract_order_from_dom(page, SEL)
-                order_info.update(dom_info)
-            except Exception as e:
-                print(f"[DEBUG] falha ao extrair order DOM: {e}")
-
-            fields = order_info.get("fields") or {}
-            status_tag = (order_info.get("status") or "").strip()
-
-            # Logistics Status (ex.: Delivered)
-            logistics_status = ""
-            for k, v in fields.items():
-                if k.lower().startswith("logistics status"):
-                    logistics_status = (v or "").strip()
-                    break
-
-            # Última descrição logística (ex.: Pedido entregue)
-            latest_desc = ""
-            for k, v in fields.items():
-                if k.lower().startswith("latest logistics description"):
-                    latest_desc = (v or "").strip()
-                    break
-
-            # (opcional) Tracking, caso venha nos fields
-            for k, v in fields.items():
-                if k.lower().startswith("tracking number"):
-                    order_info["tracking"] = (v or "").strip()
-                    break
-
-            order_info["status_consolidado"] = (
-                status_tag or logistics_status or latest_desc or "desconhecido"
-            )
-            order_info["logistics_latest_desc"] = latest_desc
+                print(f"[DEBUG] falha ao extrair detalhes do pedido com seletores: {e}")
+                try:
+                    order_info = await extract_order_from_dom(page, SEL)
+                except Exception as e_dom:
+                    print(
+                        f"[DEBUG] falha total na extração de dados do pedido: {e_dom}"
+                    )
 
             print("[DEBUG] Order info:", order_info)
 
