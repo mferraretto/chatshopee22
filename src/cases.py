@@ -76,8 +76,6 @@ def infer_problema(buyer_msgs: List[str]) -> str:
 
 def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
     problema = infer_problema(buyer_only)
-    if not problema:
-        return
 
     _ensure_header()
     ultima_msg = buyer_only[-1].strip().replace("\n", " ") if buyer_only else ""
@@ -97,8 +95,6 @@ def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
     with CSV_PATH.open("a", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow(row)
 
-    export_to_excel()
-
 
 def append_label(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
     """Salva informações básicas de pedidos que receberiam etiqueta."""
@@ -117,6 +113,8 @@ def append_label(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
 
 def export_to_excel() -> None:
     """Converte o CSV de atendimentos para um arquivo Excel."""
+    if not CSV_PATH.exists():
+        return
     wb = Workbook()
     ws = wb.active
     with CSV_PATH.open("r", newline="", encoding="utf-8") as f:

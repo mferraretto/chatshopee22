@@ -4,6 +4,7 @@ import asyncio
 from pathlib import Path
 from .duoke import DuokeBot
 from .classifier import decide_reply
+from .cases import export_to_excel
 
 DEFAULT_INTERVAL = float(os.getenv("LOOP_INTERVAL_SECONDS", "5"))
 STATE_FILE = Path(__file__).resolve().parents[1] / "storage_state.json"
@@ -18,26 +19,33 @@ async def run_forever(interval: float = DEFAULT_INTERVAL) -> None:
     bot = DuokeBot()
     backoff = interval
 
-    while True:
+    try:
+        while True:
+            try:
+                await bot.run_once(decide_reply)
+                # ciclo OK: reseta backoff e espera intervalo normal
+                backoff = interval
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                # encerramento gracioso (quando cancelado por algum orchestrator)
+                break
+            except KeyboardInterrupt:
+                # permite sair com CTRL+C quando rodando standalone
+                print("\n[LOOP] Encerrado pelo usuário (CTRL+C).")
+                break
+            except Exception as e:
+                print(f"[LOOP] erro: {e!r}")
+                # aguarda com backoff antes de tentar de novo
+                wait = min(max(2.0, backoff), 60.0)
+                print(f"[LOOP] aguardando {wait:.1f}s antes de tentar novamente...")
+                await asyncio.sleep(wait)
+                backoff = min(wait * 2, 60.0)
+    finally:
+        # Exporta os dados registrados ao encerrar o processo
         try:
-            await bot.run_once(decide_reply)
-            # ciclo OK: reseta backoff e espera intervalo normal
-            backoff = interval
-            await asyncio.sleep(interval)
-        except asyncio.CancelledError:
-            # encerramento gracioso (quando cancelado por algum orchestrator)
-            break
-        except KeyboardInterrupt:
-            # permite sair com CTRL+C quando rodando standalone
-            print("\n[LOOP] Encerrado pelo usuário (CTRL+C).")
-            break
+            export_to_excel()
         except Exception as e:
-            print(f"[LOOP] erro: {e!r}")
-            # aguarda com backoff antes de tentar de novo
-            wait = min(max(2.0, backoff), 60.0)
-            print(f"[LOOP] aguardando {wait:.1f}s antes de tentar novamente...")
-            await asyncio.sleep(wait)
-            backoff = min(wait * 2, 60.0)
+            print(f"[LOOP] falha ao exportar planilha: {e}")
 
 
 async def main() -> None:
