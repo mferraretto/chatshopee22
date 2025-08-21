@@ -242,6 +242,7 @@ function switchTab(hash) {
   const tab = document.getElementById('tab-'+hash);
   const pane = document.getElementById('pane-'+hash);
   if (tab && pane) { tab.classList.add('active'); pane.style.display='block'; }
+  if (hash === 'regras') { loadRules(); }
 }
 window.addEventListener('hashchange', () => switchTab(location.hash.slice(1) || 'ativo'));
 switchTab(location.hash.slice(1) || 'ativo');
@@ -252,7 +253,7 @@ async function loadRules() {
   tbody.innerHTML = '';
   data.forEach(r => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.active}</td><td>${r.id}</td><td>${(r.match?.any_contains||[]).join(', ')}</td><td>${r.action||'reply'}</td><td>${(r.reply||'').slice(0,80)}${(r.reply||'').length>80?'…':''}</td><td><button class="editRule" data-id="${r.id}">Editar</button></td>`;
+    tr.innerHTML = `<td>${r.active}</td><td>${r.id}</td><td>${(r.match?.any_contains||[]).join(', ')}</td><td>${r.action||'reply'}</td><td>${(r.reply||'').slice(0,80)}${(r.reply||'').length>80?'…':''}</td><td><button class="editRule" data-id="${r.id}">Editar</button><button class="delRule" data-id="${r.id}">Excluir</button></td>`;
     tbody.appendChild(tr);
   })
   tbody.querySelectorAll('.editRule').forEach(btn => {
@@ -265,6 +266,13 @@ async function loadRules() {
       form.querySelector('[name="action"]').value = rule.action || '';
       form.querySelector('[name="any_contains"]').value = (rule.match?.any_contains || []).join(', ');
       form.querySelector('[name="reply"]').value = rule.reply || '';
+    });
+  });
+  tbody.querySelectorAll('.delRule').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if(!confirm(`Excluir regra "${btn.dataset.id}"?`)) return;
+      await fetch(`/delete-rule/${encodeURIComponent(btn.dataset.id)}`, { method: 'POST' });
+      await loadRules();
     });
   });
 }
@@ -492,6 +500,13 @@ async def save_rule(
         rules.append(payload)
     save_rules(rules)
     return RedirectResponse("/", status_code=303)
+
+
+@app.post("/delete-rule/{rule_id}")
+async def delete_rule(rule_id: str):
+    rules = [r for r in load_rules() if r.get("id") != rule_id]
+    save_rules(rules)
+    return JSONResponse({"status": "ok"})
 
 
 @app.post("/save-settings")
