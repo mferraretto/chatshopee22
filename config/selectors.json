@@ -39,6 +39,12 @@
   "item_price_block": ".product_other_info > div:nth-child(1)",
   "item_qty_block": ".product_other_info > div:nth-child(3)",
 
+  "order.product_list": "div.product_info",
+  "order.product_title": ".order_item_products_item_info_title_name_url .product_url",
+  "order.product_variation": ".order_item_products_item_info_variation_name span",
+  "order.product_sku": ".order_item_products_item_info_sku span",
+  "order.buyer_name": "span.buyer_name",
+
   "buyer_payment_amount": "div.order_item_buyer .flex:has(label[title='Buyer payment amount']) span.fw_700",
   "payment_method": "div.order_item_buyer .flex:has(label[title='Payment Method']) span",
   "payment_time": "div.order_item_buyer .flex:has(label[title='Payment Time']) span",
