@@ -42,10 +42,15 @@ THREAD_LIST_SEL = SEL.get(
     "chat_list_root",
     "div.session_list, ul.session_list, div.chat_list",
 )
-THREAD_ITEM_SEL = SEL.get(
-    "chat_list_item",
-    f"{SEL.get('chat_list_root', 'div.session_list, ul.session_list, div.chat_list')} li, {SEL.get('chat_list_root', 'div.session_list, ul.session_list, div.chat_list')} .session_item, {SEL.get('chat_list_root', 'div.session_list, ul.session_list, div.chat_list')} .list_item",
-)
+
+_root_parts = [s.strip() for s in THREAD_LIST_SEL.split(",")]
+_default_rows = []
+for r in _root_parts:
+    _default_rows.extend(
+        [f"{r} > ul > li", f"{r} li.session_item", f"{r} li[role='listitem']"]
+    )
+
+THREAD_ROW_SEL = SEL.get("chat_list_item", ", ".join(_default_rows))
 UNREAD_BADGE_SEL = ".unread, .red_point, .badge"
 
 TS_ONLY_RE = re.compile(r"^\d{2}/\d{2}\s+\d{2}:\d{2}$")
@@ -67,13 +72,49 @@ WANTS_PARTS_RE = re.compile(
 )
 
 
+async def get_current_conversation_id(page) -> str:
+    for sel in [
+        "div.order_header :text('Order ID')",
+        "div.order_item_products_item_info_title_name_url .product_url",
+        "div.chat_header .account_name",
+    ]:
+        try:
+            t = await page.text_content(sel)
+            if t and t.strip():
+                return t.strip()
+        except Exception:
+            pass
+    return ""
+
+
+async def click_thread_row(page, i: int):
+    rows = page.locator(THREAD_ROW_SEL)
+    li = rows.nth(i)
+    await li.scroll_into_view_if_needed()
+    await li.wait_for(state="visible", timeout=5000)
+    await li.click()
+
+
+async def open_thread_by_index(page, i: int) -> bool:
+    before = await get_current_conversation_id(page)
+    await click_thread_row(page, i)
+    for _ in range(20):
+        await page.wait_for_timeout(150)
+        after = await get_current_conversation_id(page)
+        if after and after != before:
+            return True
+    print("[DEBUG] conversa não trocou ao clicar no índice", i)
+    return False
+
+
 async def iterate_threads(page, max_threads=300):
-    await page.wait_for_selector(THREAD_ITEM_SEL, timeout=15000)
-    seen: set[str] = set()
+    await page.wait_for_selector(THREAD_ROW_SEL, timeout=15000)
+    seen_ids: set[str] = set()
     idx = 0
+    rows = page.locator(THREAD_ROW_SEL)
     while idx < max_threads:
-        items = await page.locator(THREAD_ITEM_SEL).count()
-        if idx >= items:
+        count = await rows.count()
+        if idx >= count:
             try:
                 await page.locator(THREAD_LIST_SEL).first.evaluate(
                     "el => el.scrollTop = el.scrollHeight"
@@ -82,22 +123,21 @@ async def iterate_threads(page, max_threads=300):
                 await page.eval_on_selector(
                     THREAD_LIST_SEL, "el => el.scrollTop = el.scrollHeight"
                 )
-            await page.wait_for_timeout(400)
-            items = await page.locator(THREAD_ITEM_SEL).count()
-            if idx >= items:
+            await page.wait_for_timeout(500)
+            count = await rows.count()
+            if idx >= count:
                 break
-        li = page.locator(THREAD_ITEM_SEL).nth(idx)
-        descriptor = (await li.text_content() or "").strip()
-        if descriptor in seen:
+        ok = await open_thread_by_index(page, idx)
+        if not ok:
             idx += 1
             continue
-        seen.add(descriptor)
-        try:
-            await li.click()
-            await page.wait_for_timeout(400)
-            yield descriptor
-        except Exception as e:
-            print("[DEBUG] click thread error:", e)
+        conv_id = await get_current_conversation_id(page)
+        if conv_id in seen_ids:
+            idx += 1
+            continue
+        seen_ids.add(conv_id)
+        print("[DEBUG] >>> Conversa aberta:", conv_id)
+        yield conv_id
         idx += 1
 
 
