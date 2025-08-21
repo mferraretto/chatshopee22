@@ -6,6 +6,7 @@ import re
 
 from .gemini_client import generate_reply
 from .config import settings
+from .firebase_client import get_product_by_sku
 
 RESP_FALLBACK_CURTO = "Desculpe, não entendi muito bem sua mensagem. Você poderia explicar um pouco melhor para que eu consiga te ajudar?"
 
@@ -69,6 +70,14 @@ def decide_reply(
     history = order_info.get("history_block") if order_info else None
     if not history:
         history = "\n".join(msgs)
+
+    # Busca dados do produto pelo SKU e injeta em order_info
+    sku = order_info.get("sku") if order_info else None
+    if sku:
+        prod = get_product_by_sku(sku)
+        if prod:
+            order_info = dict(order_info or {})
+            order_info["product_info"] = prod
 
     # exemplo de uso do classificador regex (opcional)
     _ = intent_from_text(" ".join(msgs))
