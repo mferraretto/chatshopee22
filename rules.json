@@ -57,7 +57,7 @@
     "id": "cilindro_pequeno",
     "active": true,
     "match": {
-      "any_contains": ["cilindro pequeno", "cilindro não é grande", "cilindro errado", "cilindros compactos", "trio compacto"]
+      "any_contains": ["cilindro pequeno", "cilindro não é grande", "cilindro errado", "cilindros compactos", "trio compacto"],
       "none_contains": ["arco", "arcos", "painel", "painel pequeno", "painel grande", "arco de balão", "arco menor", "diâmetro do arco"]
     },
     "reply": "Boa tarde! Tudo bem? Poxa, sinto muito pela confusão. Esse anúncio é referente ao trio compacto (3 peças menores), como mostramos na descrição e nas imagens com as medidas. Para alcançar o tamanho padrão, muitos clientes usam 2 trios compactos. Se quiser completar, posso te oferecer 25% de desconto no segundo trio!"

@@ -1255,8 +1255,12 @@ class DuokeBot:
             await asyncio.sleep(1)
             return
 
-        # Garante que conversas cujo último envio foi do vendedor também apareçam
-        await self.show_all_conversations(page)
+        # Garante que o filtro "precisa responder" seja removido quando queremos
+        # responder mesmo que a última mensagem seja do vendedor
+        if RESPONDER_MESMO_SE_ULTIMA_FOR_SELLER:
+            await self.show_all_conversations(page)
+        else:
+            await self.apply_needs_reply_filter(page)
 
         max_convs = int(getattr(settings, "max_conversations", 0) or 0)
         i = -1

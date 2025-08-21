@@ -666,6 +666,13 @@ async def _run_cycle(run_once: bool):
     LAST_ERR = None
     _bot = DuokeBot()
 
+    log("[READY] Worker iniciado")
+
+    async def _heartbeat():
+        while RUNNING:
+            log("[READY] heartbeat")
+            await asyncio.sleep(30)
+
     # Hook para UI ver o que foi lido e a resposta sugerida
     async def hook(pairs, buyer_only, order_info=None) -> tuple[bool, str]:
         ws_broadcast(
@@ -690,6 +697,7 @@ async def _run_cycle(run_once: bool):
         return should, reply
 
     mirror_task = asyncio.create_task(_mirror_loop())
+    hb_task = asyncio.create_task(_heartbeat())
     try:
         if run_once:
             await _bot.run_once(hook)  # uma passada
@@ -699,10 +707,11 @@ async def _run_cycle(run_once: bool):
         LAST_ERR = f"{type(e).__name__}: {e}"
         log(f"[ERROR] {type(e).__name__}: {e}")
     finally:
-        try:
-            mirror_task.cancel()
-        except Exception:
-            pass
+        for t in (mirror_task, hb_task):
+            try:
+                t.cancel()
+            except Exception:
+                pass
         RUNNING = False
         ws_broadcast({"snapshot": {"running": False}})
         _bot = None
@@ -713,6 +722,7 @@ async def start():
     global _task, RUNNING
     if RUNNING:
         return RedirectResponse("/", status_code=303)
+    log("[READY] start recebido, worker disparado")
     if not duoke_is_connected():
         log("[UI] Duoke não conectado. Faça login na aba Configurações.")
     ws_broadcast({"snapshot": {"running": True}})
