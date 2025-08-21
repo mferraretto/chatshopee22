@@ -234,9 +234,9 @@ async def ensure_messages_rendered(frame):
 
 async def _bubble_text_from_li(li) -> str:
     for sel in (".msg_cont .msg_text .text_cont", ".text_cont", ".quote_content_wrap_new"):
-        node = await li.query_selector(sel)
-        if node:
-            t = _clean(await node.text_content())
+        node = li.locator(sel).first
+        if await node.count() > 0:
+            t = _clean(await node.text_content() or "")
             if t and not TS_ONLY_RE.match(t) and not any(n.lower() in t.lower() for n in NOISE):
                 return t
     t = _clean(await li.text_content() or "")
@@ -256,7 +256,11 @@ async def get_timeline(page, limit=120) -> list[dict]:
         li = loc.nth(i)
         klass = (await li.get_attribute("class")) or ""
         role = "buyer" if "lt" in klass else "seller"
-        text = await _bubble_text_from_li(li)
+        try:
+            text = await _bubble_text_from_li(li)
+        except Exception as e:
+            print("[ERROR] bubble_extract:", e)
+            text = ""
         if text:
             out.append({"role": role, "text": text})
     dbg("timeline_last", out[-6:])
