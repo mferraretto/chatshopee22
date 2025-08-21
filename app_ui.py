@@ -183,7 +183,7 @@ HTML = Template(
       <div class="card">
         <h3>Regras</h3>
         <table>
-          <thead><tr><th>Ativa</th><th>ID</th><th>Match (any_contains)</th><th>Ação</th><th>Resposta</th></tr></thead>
+          <thead><tr><th>Ativa</th><th>ID</th><th>Match (any_contains)</th><th>Ação</th><th>Resposta</th><th></th></tr></thead>
           <tbody id="rulesBody"></tbody>
         </table>
         <h4>Criar/Atualizar</h4>
@@ -199,7 +199,7 @@ HTML = Template(
           <input name="any_contains" type="text" style="width:100%;" placeholder="quebrado, faltou, não veio">
           <label>Resposta (se ação = reply)</label>
           <textarea name="reply" rows="5" style="width:100%;"></textarea>
-          <div class="row"><button>Salvar regra</button><a href="/reload-rules" class="secondary" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Recarregar do arquivo</a></div>
+          <div class="row"><button>Salvar regra</button><button type="button" id="newRuleBtn" class="secondary">Nova regra</button><a href="/reload-rules" class="secondary" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Recarregar do arquivo</a></div>
         </form>
       </div>
     </section>
@@ -248,11 +248,28 @@ async function loadRules() {
   tbody.innerHTML = '';
   data.forEach(r => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.active}</td><td>${r.id}</td><td>${(r.match?.any_contains||[]).join(', ')}</td><td>${r.action||'reply'}</td><td>${(r.reply||'').slice(0,80)}${(r.reply||'').length>80?'…':''}</td>`;
+    tr.innerHTML = `<td>${r.active}</td><td>${r.id}</td><td>${(r.match?.any_contains||[]).join(', ')}</td><td>${r.action||'reply'}</td><td>${(r.reply||'').slice(0,80)}${(r.reply||'').length>80?'…':''}</td><td><button class="editRule" data-id="${r.id}">Editar</button></td>`;
     tbody.appendChild(tr);
   })
+  tbody.querySelectorAll('.editRule').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rule = data.find(rr => rr.id === btn.dataset.id);
+      if(!rule) return;
+      const form = document.querySelector('#pane-regras form');
+      form.querySelector('[name="id"]').value = rule.id || '';
+      form.querySelector('[name="active"]').value = String(rule.active);
+      form.querySelector('[name="action"]').value = rule.action || '';
+      form.querySelector('[name="any_contains"]').value = (rule.match?.any_contains || []).join(', ');
+      form.querySelector('[name="reply"]').value = rule.reply || '';
+    });
+  });
 }
 loadRules();
+
+document.getElementById('newRuleBtn').addEventListener('click', () => {
+  const form = document.querySelector('#pane-regras form');
+  form.reset();
+});
 
 let ws;
 function connectWS(){
