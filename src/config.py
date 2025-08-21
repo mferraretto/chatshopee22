@@ -58,12 +58,6 @@ class Settings(BaseModel):
         default_factory=lambda: int(os.getenv("GOTO_TIMEOUT_MS", "60000"))
     )
 
-    label_on_skip: str = Field(
-        default_factory=lambda: os.getenv("LABEL_ON_SKIP", "gpt")
-    )
-    label_on_missing_parts: str = Field(
-        default_factory=lambda: os.getenv("LABEL_ON_MISSING_PARTS", "gpt")
-    )
 
     # --- Cloud Run / Servidor ---
     port: int = Field(default_factory=lambda: int(os.getenv("PORT", "8080")))

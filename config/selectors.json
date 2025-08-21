@@ -27,10 +27,6 @@
   "filter_needs_reply": "text=Precisa responder, text=Need Reply, text=Pending Reply",
   "filter_all_conversations": "text=Todos, text=All, text=All messages, text=Todas",
 
-  "tag_button": ".cont_header .contact_action_icon:has(i.icon_mark_1), .contact_action .contact_action_icon:has(i.icon_mark_1)",
-  "tag_item": "span.label_item_name",
-  "tag_item_active": ".label_item.active",
-  "tag_confirm": ".el-dialog__footer .el-button--primary, .select_label_dialog .el-button--primary",
 
   "status_badge": "div.order_item_status .el-tag",
   "order_status_tag": "div.order_item_status .el-tag",
