@@ -28,6 +28,39 @@ SEL = json.loads(
     )
 )
 
+
+def dbg(tag, data):
+    try:
+        print(f"[DEBUG] {tag}: {data}")
+    except Exception as e:
+        print(f"[DEBUG] {tag}: <unprintable> {e}")
+
+
+MESSAGES_CONTAINER_SEL = SEL.get(
+    "messages_container",
+    "ul.message_main, ul.message_main.watermark_shopee",
+)
+BUYER_BUBBLES_SEL = SEL.get(
+    "buyer_bubbles",
+    "ul.message_main li.lt .msg_cont .msg_text .text_cont",
+)
+BUYER_FALLBACK_SEL = SEL.get(
+    "buyer_bubbles_fallback",
+    "ul.message_main li.lt .text_cont",
+)
+SELLER_BUBBLES_SEL = SEL.get(
+    "seller_bubbles",
+    "ul.message_main li.rt .msg_cont .msg_text .text_cont",
+)
+SELLER_FALLBACK_SEL = SEL.get(
+    "seller_bubbles_fallback",
+    "ul.message_main li.rt .text_cont",
+)
+STATUS_BADGE_SEL = SEL.get(
+    "status_badge",
+    "div.order_item_status .el-tag",
+)
+
 WANTS_PARTS_RE = re.compile(
     r"(quero|prefiro|pode|manda|mandar|envia|enviar|me envia|me mandar).{0,25}(peça|peças|pecas|as peças|as pecas|a peça|a peca)",
     re.I,
@@ -82,40 +115,60 @@ def _parse_qty(txt: str) -> int:
     return int(m.group(1)) if m else 0
 
 
+async def _all_texts(page, selector: str) -> list[str]:
+    if not selector:
+        return []
+    try:
+        texts = await page.eval_on_selector_all(
+            selector, "nodes => nodes.map(n => n.textContent || '').filter(Boolean)"
+        )
+        if texts:
+            return texts
+    except Exception as e:
+        dbg("eval_on_selector_all.error", f"{selector} -> {e}")
+
+    try:
+        nodes = await page.query_selector_all(selector)
+        out = []
+        for n in nodes:
+            t = await n.text_content()
+            if t:
+                out.append(t)
+        return out
+    except Exception as e:
+        dbg("query_selector_all.error", f"{selector} -> {e}")
+        return []
+
+
 async def get_last_buyer_texts(page, limit=20) -> list[str]:
-    await page.wait_for_selector(SEL["messages_container"], timeout=15000)
+    try:
+        await page.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=8000)
+    except Exception as e:
+        dbg("wait.messages_container.timeout", e)
 
     try:
         await page.eval_on_selector_all(
-            SEL["buyer_badge_noise"], "nodes => nodes.forEach(n => n.remove())"
+            SEL.get("buyer_badge_noise", ""),
+            "nodes => nodes.forEach(n => n.remove())",
         )
     except Exception:
         pass
     try:
         await page.eval_on_selector_all(
-            SEL["quote_blocks"], "nodes => nodes.forEach(n => n.remove())"
+            SEL.get("quote_blocks", ""),
+            "nodes => nodes.forEach(n => n.remove())",
         )
     except Exception:
         pass
 
-    texts = await page.eval_on_selector_all(
-        SEL["buyer_bubbles"],
-        "nodes => nodes.map(n => n.textContent || '').filter(Boolean)",
-    )
-
+    texts = await _all_texts(page, BUYER_BUBBLES_SEL)
     if len(texts) < 5:
         await page.mouse.wheel(0, -1500)
         await page.wait_for_timeout(600)
-        texts = await page.eval_on_selector_all(
-            SEL["buyer_bubbles"],
-            "nodes => nodes.map(n => n.textContent || '').filter(Boolean)",
-        )
+        texts = await _all_texts(page, BUYER_BUBBLES_SEL)
 
     if not texts:
-        texts = await page.eval_on_selector_all(
-            SEL["buyer_bubbles_fallback"],
-            "nodes => nodes.map(n => n.textContent || '').filter(Boolean)",
-        )
+        texts = await _all_texts(page, BUYER_FALLBACK_SEL)
 
     cleaned = []
     for raw in texts:
@@ -126,28 +179,27 @@ async def get_last_buyer_texts(page, limit=20) -> list[str]:
             continue
         cleaned.append(t)
 
+    dbg("buyer_last", cleaned[-limit:])
     return cleaned[-limit:]
 
 
 async def get_last_seller_texts(page, limit=30) -> list[str]:
-    await page.wait_for_selector(SEL["messages_container"], timeout=15000)
+    try:
+        await page.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=8000)
+    except Exception as e:
+        dbg("wait.messages_container.timeout", e)
 
     try:
         await page.eval_on_selector_all(
-            SEL["quote_blocks"], "nodes => nodes.forEach(n => n.remove())"
+            SEL.get("quote_blocks", ""),
+            "nodes => nodes.forEach(n => n.remove())",
         )
     except Exception:
         pass
 
-    texts = await page.eval_on_selector_all(
-        SEL["seller_bubbles"],
-        "nodes => nodes.map(n => n.textContent || '').filter(Boolean)",
+    texts = await _all_texts(page, SELLER_BUBBLES_SEL) or await _all_texts(
+        page, SELLER_FALLBACK_SEL
     )
-    if not texts:
-        texts = await page.eval_on_selector_all(
-            SEL["seller_bubbles_fallback"],
-            "nodes => nodes.map(n => n.textContent || '').filter(Boolean)",
-        )
 
     cleaned = []
     for raw in texts:
@@ -158,24 +210,52 @@ async def get_last_seller_texts(page, limit=30) -> list[str]:
             continue
         cleaned.append(t)
 
+    dbg("seller_last", cleaned[-limit:])
     return cleaned[-limit:]
 
 
-OFFER_PATTERNS = [
-    r"\b(reembols\w+|reembolso|estorno)\b",
-    r"\b(troca(r|remos)?|efetuar\s+troca|fazer\s+a\s+troca)\b",
-    r"\b(enviar(\s+a)?\s*(peça|peca)\s*(faltante|que faltou)?)\b",
-    r"\b(reenviar|reenvio)\b",
-    r"\b(devolver|devolu(c|ç)ão)\b",
-]
-OFFER_RE = re.compile("|".join(OFFER_PATTERNS), re.I)
+async def get_timeline(page, limit=60) -> list[dict]:
+    items = await page.query_selector_all("ul.message_main li.lt, ul.message_main li.rt")
+    out = []
+    for li in items[-limit:]:
+        klass = await li.get_attribute("class") or ""
+        role = "buyer" if "lt" in klass.split() else "seller"
+        txt = await li.text_content()
+        txt = _clean(txt)
+        if not txt:
+            continue
+        if any(x.lower() in txt.lower() for x in NOISE_SUBSTRINGS):
+            continue
+        out.append({"role": role, "text": txt})
+    dbg("timeline_last", out[-10:])
+    return out
+
+
+OFFER_RE = re.compile(
+    r"(reembols\w+|estorno|troca(r|remos)?|efetuar\s+a?\s*troca|reenviar|reenvio|enviar\s+(a\s+)?pe(ç|c)a\s+(faltante|que\s+faltou)|devolu(c|ç)ão)",
+    re.I,
+)
 
 
 def seller_offered_resolution(msgs: list[str]) -> bool:
-    if not msgs:
-        return False
     joined = " \n ".join(msgs)
     return bool(OFFER_RE.search(joined))
+
+
+def buyer_answered_after_offer(timeline: list[dict]) -> bool:
+    last_offer_idx = None
+    for i, m in enumerate(timeline):
+        if m["role"] == "seller" and OFFER_RE.search(m["text"]):
+            last_offer_idx = i
+    if last_offer_idx is None:
+        return False
+    for m in timeline[last_offer_idx + 1 :]:
+        if m["role"] == "buyer":
+            return True
+    return False
+
+
+SKIP_WHEN_OFFERED = True  # coloque False se quiser forçar respostas temporariamente
 
 
 STATUS_RANK = {
@@ -206,36 +286,39 @@ def _norm_status(s: str) -> str:
 
 
 async def get_status_consolidated(page) -> str:
-    badges = await page.eval_on_selector_all(
-        SEL["status_badge"],
-        "nodes => nodes.map(n => (n.textContent || '').trim()).filter(Boolean)",
-    )
+    try:
+        badges = await _all_texts(page, STATUS_BADGE_SEL)
+    except Exception as e:
+        dbg("status_badge.error", e)
+        badges = []
     mapped = [_norm_status(x) for x in badges]
-    return max(mapped, key=lambda x: STATUS_RANK.get(x, 0)) if mapped else "unknown"
+    status = max(mapped, key=lambda x: STATUS_RANK.get(x, 0)) if mapped else "unknown"
+    dbg("status_consolidated", status)
+    return status
 
 
 async def get_order_items(page) -> list[dict]:
-    await page.wait_for_selector(SEL["order_items_root"], timeout=15000)
+    await page.wait_for_selector(SEL.get("order_items_root", ""), timeout=15000)
     items = []
-    for h in await page.query_selector_all(SEL["order_item"]):
+    for h in await page.query_selector_all(SEL.get("order_item", "")):
         title = await h.eval_on_selector(
-            SEL["item_title"],
+            SEL.get("item_title", ""),
             "el => el.textContent || ''",
         )
         variation = await h.eval_on_selector(
-            SEL["item_variation"],
+            SEL.get("item_variation", ""),
             "el => el.getAttribute('title') || el.textContent || ''",
         )
         sku = await h.eval_on_selector(
-            SEL["item_sku"],
+            SEL.get("item_sku", ""),
             "el => el.getAttribute('title') || el.textContent || ''",
         )
         price_txt = await h.eval_on_selector(
-            SEL["item_price_block"],
+            SEL.get("item_price_block", ""),
             "el => el.textContent || ''",
         )
         qty_txt = await h.eval_on_selector(
-            SEL["item_qty_block"],
+            SEL.get("item_qty_block", ""),
             "el => el.textContent || ''",
         )
         items.append(
@@ -670,7 +753,7 @@ class DuokeBot:
         # Aguarda painel renderizar
         try:
             if SEL.get("messages_container"):
-                await page.wait_for_selector(SEL["messages_container"], timeout=9000)
+                await page.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=9000)
             await page.wait_for_function(
                 """() => {
                     const ul = document.querySelector('ul.message_main');
@@ -683,7 +766,7 @@ class DuokeBot:
 
         try:
             if SEL.get("input_textarea"):
-                await page.wait_for_selector(SEL["input_textarea"], timeout=8000)
+                await page.wait_for_selector(SEL.get("input_textarea", ""), timeout=8000)
         except Exception:
             pass
 
@@ -1057,10 +1140,10 @@ class DuokeBot:
     async def get_order_bits(page):
         """Lê status/desc/track + produto/variação/SKU do painel direito usando SEL."""
         status_tag = await DuokeBot._text_or_empty(
-            page.locator(SEL["order_status_tag"])
+            page.locator(SEL.get("order_status_tag", ""))
         )
 
-        log_status_el = page.locator(SEL["logistics_status"])
+        log_status_el = page.locator(SEL.get("logistics_status", ""))
         logistics_status = ""
         if await log_status_el.count():
             logistics_status = (await log_status_el.first().get_attribute("title")) or (
@@ -1069,14 +1152,14 @@ class DuokeBot:
             logistics_status = (logistics_status or "").strip()
 
         latest_desc = await DuokeBot._text_or_empty(
-            page.locator(SEL["latest_logistics_description"])
+            page.locator(SEL.get("latest_logistics_description", ""))
         )
-        tracking = await DuokeBot._text_or_empty(page.locator(SEL["tracking_number"]))
-        product = await DuokeBot._text_or_empty(page.locator(SEL["product_title"]))
+        tracking = await DuokeBot._text_or_empty(page.locator(SEL.get("tracking_number", "")))
+        product = await DuokeBot._text_or_empty(page.locator(SEL.get("product_title", "")))
         variation = await DuokeBot._text_or_empty(
-            page.locator(SEL["product_variation"])
+            page.locator(SEL.get("product_variation", ""))
         )
-        sku = await DuokeBot._text_or_empty(page.locator(SEL["product_sku"]))
+        sku = await DuokeBot._text_or_empty(page.locator(SEL.get("product_sku", "")))
 
         status_consolidado = (
             status_tag or logistics_status or latest_desc or "desconhecido"
@@ -1095,18 +1178,18 @@ class DuokeBot:
 
     @staticmethod
     async def get_review_text(page):
-        stars = page.locator(SEL["review_stars"])
+        stars = page.locator(SEL.get("review_stars", ""))
         if not await stars.count():
             return ""
         try:
             await stars.first().hover()
-            popup = page.locator(SEL["review_text"])
+            popup = page.locator(SEL.get("review_text", ""))
             await popup.first().wait_for(state="visible", timeout=9000)
             return (await popup.first().inner_text() or "").strip()
         except Exception:
             try:
                 await stars.first().click()
-                popup = page.locator(SEL["review_text"])
+                popup = page.locator(SEL.get("review_text", ""))
                 await popup.first().wait_for(state="visible", timeout=9000)
                 return (await popup.first().inner_text() or "").strip()
             except Exception:
@@ -1204,21 +1287,31 @@ class DuokeBot:
             # ----- Mensagens + history -----
             buyer_msgs = await get_last_buyer_texts(page, limit=20)
             seller_msgs = await get_last_seller_texts(page, limit=30)
+            timeline = await get_timeline(page, limit=60)
+
             offered = seller_offered_resolution(seller_msgs)
-            save_conversation_snapshot(
-                {
-                    "order_id": order_info.get("orderId"),
-                    "buyer_last_20": buyer_msgs,
-                    "seller_last_30": seller_msgs,
-                    "offered_resolution": offered,
-                }
-            )
-            if offered:
+            buyer_after = buyer_answered_after_offer(timeline)
+
+            dbg("offered_resolution", offered)
+            dbg("buyer_after_offer", buyer_after)
+
+            snapshot = {
+                "order_id": order_info.get("orderId"),
+                "buyer_last_20": buyer_msgs,
+                "seller_last_30": seller_msgs,
+                "offered_resolution": offered,
+            }
+            if SKIP_WHEN_OFFERED and offered and not buyer_after:
+                snapshot["skipped_reason"] = "prior_offer_no_buyer_followup"
+                save_conversation_snapshot(snapshot)
                 mark_conversation_skipped(
                     order_info.get("orderId"),
-                    reason="prior_offer_exchange_or_refund",
+                    reason="prior_offer_no_buyer_followup",
                 )
+                dbg("decision", "SKIP_CONVERSATION")
                 continue
+            else:
+                save_conversation_snapshot(snapshot)
 
             depth = int(getattr(settings, "history_depth", 8) or 8)
             pairs = await self.read_messages_with_roles(page, depth * 2)
