@@ -140,76 +140,95 @@ async def _all_texts(page, selector: str) -> list[str]:
         return []
 
 
-TS_ONLY_RE = re.compile(r"^\d{2}/\d{2}\s+\d{2}:\d{2}$")
-NOISE = NOISE_SUBSTRINGS
-MSG_CONTAINER_SEL = MESSAGES_CONTAINER_SEL
-ALL_ITEMS_SEL = "ul.message_main li[class*='lt'], ul.message_main li[class*='rt']"
-
-
-async def get_chat_frame(page):
-    if await page.locator(MSG_CONTAINER_SEL).count():
-        return page
-    for f in page.frames:
-        try:
-            if await f.locator(MSG_CONTAINER_SEL).count():
-                return f
-        except Exception:
-            pass
-    return page
-
-
-async def ensure_messages_rendered(frame):
-    try:
-        await frame.wait_for_selector(MSG_CONTAINER_SEL, timeout=12000)
-    except Exception:
-        return
-    await frame.eval_on_selector(MSG_CONTAINER_SEL, "el => el.scrollTop = el.scrollHeight")
-    await frame.wait_for_timeout(250)
-
-
-async def _bubble_text_from_li(li) -> str:
-    for sel in (".msg_cont .msg_text .text_cont", ".text_cont", ".quote_content_wrap_new"):
-        node = await li.query_selector(sel)
-        if node:
-            t = _clean(await node.text_content())
-            if t and not TS_ONLY_RE.match(t) and not any(n.lower() in t.lower() for n in NOISE):
-                return t
-    t = _clean(await li.text_content() or "")
-    t = re.sub(r"\b\d{2}/\d{2}\s+\d{2}:\d{2}\b", "", t).strip()
-    if t and not any(n.lower() in t.lower() for n in NOISE):
-        return t
-    return ""
-
-
-async def get_timeline(page, limit=120) -> list[dict]:
-    f = await get_chat_frame(page)
-    await ensure_messages_rendered(f)
-    loc = f.locator(ALL_ITEMS_SEL)
-    n = await loc.count()
-    out = []
-    for i in range(max(0, n - limit), n):
-        li = loc.nth(i)
-        klass = (await li.get_attribute("class")) or ""
-        role = "buyer" if "lt" in klass else "seller"
-        text = await _bubble_text_from_li(li)
-        if text:
-            out.append({"role": role, "text": text})
-    dbg("timeline_last", out[-6:])
-    return out
-
-
 async def get_last_buyer_texts(page, limit=20) -> list[str]:
-    tl = await get_timeline(page, 200)
-    buyer = [m["text"] for m in tl if m["role"] == "buyer"]
-    dbg("buyer_last", buyer[-limit:])
-    return buyer[-limit:]
+    try:
+        await page.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=8000)
+    except Exception as e:
+        dbg("wait.messages_container.timeout", e)
+
+    try:
+        await page.eval_on_selector_all(
+            SEL.get("buyer_badge_noise", ""),
+            "nodes => nodes.forEach(n => n.remove())",
+        )
+    except Exception:
+        pass
+    try:
+        await page.eval_on_selector_all(
+            SEL.get("quote_blocks", ""),
+            "nodes => nodes.forEach(n => n.remove())",
+        )
+    except Exception:
+        pass
+
+    texts = await _all_texts(page, BUYER_BUBBLES_SEL)
+    if len(texts) < 5:
+        await page.mouse.wheel(0, -1500)
+        await page.wait_for_timeout(600)
+        texts = await _all_texts(page, BUYER_BUBBLES_SEL)
+
+    if not texts:
+        texts = await _all_texts(page, BUYER_FALLBACK_SEL)
+
+    cleaned = []
+    for raw in texts:
+        t = _clean(raw)
+        if not t:
+            continue
+        if any(x.lower() in t.lower() for x in NOISE_SUBSTRINGS):
+            continue
+        cleaned.append(t)
+
+    dbg("buyer_last", cleaned[-limit:])
+    return cleaned[-limit:]
 
 
 async def get_last_seller_texts(page, limit=30) -> list[str]:
-    tl = await get_timeline(page, 200)
-    seller = [m["text"] for m in tl if m["role"] == "seller"]
-    dbg("seller_last", seller[-limit:])
-    return seller[-limit:]
+    try:
+        await page.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=8000)
+    except Exception as e:
+        dbg("wait.messages_container.timeout", e)
+
+    try:
+        await page.eval_on_selector_all(
+            SEL.get("quote_blocks", ""),
+            "nodes => nodes.forEach(n => n.remove())",
+        )
+    except Exception:
+        pass
+
+    texts = await _all_texts(page, SELLER_BUBBLES_SEL) or await _all_texts(
+        page, SELLER_FALLBACK_SEL
+    )
+
+    cleaned = []
+    for raw in texts:
+        t = _clean(raw)
+        if not t:
+            continue
+        if any(x.lower() in t.lower() for x in NOISE_SUBSTRINGS):
+            continue
+        cleaned.append(t)
+
+    dbg("seller_last", cleaned[-limit:])
+    return cleaned[-limit:]
+
+
+async def get_timeline(page, limit=60) -> list[dict]:
+    items = await page.query_selector_all("ul.message_main li.lt, ul.message_main li.rt")
+    out = []
+    for li in items[-limit:]:
+        klass = await li.get_attribute("class") or ""
+        role = "buyer" if "lt" in klass.split() else "seller"
+        txt = await li.text_content()
+        txt = _clean(txt)
+        if not txt:
+            continue
+        if any(x.lower() in txt.lower() for x in NOISE_SUBSTRINGS):
+            continue
+        out.append({"role": role, "text": txt})
+    dbg("timeline_last", out[-10:])
+    return out
 
 
 OFFER_RE = re.compile(
@@ -236,9 +255,7 @@ def buyer_answered_after_offer(timeline: list[dict]) -> bool:
     return False
 
 
-RESPONDER_MESMO_SE_ULTIMA_FOR_SELLER = True
-PULAR_QUANDO_JA_HOUVE_OFERTA_SEM_RESPOSTA_DO_COMPRADOR = True
-SKIP_WHEN_OFFERED = PULAR_QUANDO_JA_HOUVE_OFERTA_SEM_RESPOSTA_DO_COMPRADOR
+SKIP_WHEN_OFFERED = True  # coloque False se quiser forçar respostas temporariamente
 
 
 STATUS_RANK = {
@@ -730,11 +747,9 @@ class DuokeBot:
         total = await conv_locator.count()
         if idx >= total:
             return False
-        li = conv_locator.nth(idx)
-        return await self.open_conversation_element(page, li)
 
-    async def open_conversation_element(self, page, li) -> bool:
-        await li.click()
+        await conv_locator.nth(idx).click()
+
         # Aguarda painel renderizar
         try:
             if SEL.get("messages_container"):
@@ -759,49 +774,6 @@ class DuokeBot:
             int(getattr(settings, "delay_between_actions", 1.0) * 1000)
         )
         return True
-
-    async def iterate_conversations(self, page, max_threads: int = 300):
-        thread_list_sel = SEL.get(
-            "chat_list_container",
-            "div.session_list, ul.session_list, div.chat_list, .list_container_content .virtual_list, .contact_list .virtual_list",
-        )
-        item_sel = SEL.get("chat_list_item", "ul.chat_list li")
-        thread_item_sel = f"{thread_list_sel} li, {item_sel}"
-        await page.wait_for_selector(thread_item_sel, timeout=15000)
-
-        seen: set[str] = set()
-        idx = 0
-        yielded = 0
-        while yielded < max_threads:
-            items = await page.locator(thread_item_sel).count()
-            if idx >= items:
-                try:
-                    await page.eval_on_selector(
-                        thread_list_sel, "el => el.scrollTop = el.scrollHeight"
-                    )
-                except Exception:
-                    try:
-                        await page.mouse.wheel(0, 800)
-                    except Exception:
-                        pass
-                await page.wait_for_timeout(400)
-                items = await page.locator(thread_item_sel).count()
-                if idx >= items:
-                    break
-
-            li = page.locator(thread_item_sel).nth(idx)
-            descriptor = (await li.text_content() or "").strip()
-            if descriptor in seen:
-                idx += 1
-                continue
-            seen.add(descriptor)
-            try:
-                await self.open_conversation_element(page, li)
-                yield idx, descriptor
-                yielded += 1
-            except Exception as e:
-                print(f"[DEBUG] click thread error: {e}")
-            idx += 1
 
     # ---------- leitura de mensagens ----------
 
@@ -1247,14 +1219,24 @@ class DuokeBot:
         # Garante que conversas cujo último envio foi do vendedor também apareçam
         await self.show_all_conversations(page)
 
+        conv_locator = self.conversations(page)
         await page.wait_for_timeout(300)
-        max_convs = int(getattr(settings, "max_conversations", 0) or 0)
-        if max_convs <= 0:
-            max_convs = 300
+        total = await conv_locator.count()
+        print(f"[DEBUG] conversas visíveis: {total}")
 
-        async for i, desc in self.iterate_conversations(page, max_convs):
+        max_convs = int(getattr(settings, "max_conversations", 0) or 0)
+        if max_convs > 0:
+            total = min(total, max_convs)
+
+        for i in range(total):
             await self.pause_event.wait()
-            dbg(">>> Conversa", desc)
+            try:
+                ok = await self.open_conversation_by_index(page, i)
+                if not ok:
+                    continue
+            except Exception as e:
+                print(f"[DEBUG] falha ao abrir conversa {i}: {e}")
+                continue
 
             await self.pause_event.wait()
 
@@ -1320,12 +1302,7 @@ class DuokeBot:
                 "seller_last_30": seller_msgs,
                 "offered_resolution": offered,
             }
-            if (
-                SKIP_WHEN_OFFERED
-                and offered
-                and not buyer_after
-                and buyer_msgs
-            ):
+            if SKIP_WHEN_OFFERED and offered and not buyer_after:
                 snapshot["skipped_reason"] = "prior_offer_no_buyer_followup"
                 save_conversation_snapshot(snapshot)
                 mark_conversation_skipped(
