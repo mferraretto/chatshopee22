@@ -1,122 +1,155 @@
 [
   {
-    "id": "tempo_envio",
+    "id": "agradecimento_curto",
     "active": true,
-    "match": { "any_contains": ["quanto tempo", "demora para enviar", "quando envia", "prazo de envio"] },
-    "reply": "Oii, tudo bem? As compras feitas hoje, são enviadas amanhã pela manhã, e chegam em média de 3 a 5 dias úteis."
+    "match": { "any_contains": ["obg", "obrigado", "obrigada", "valeu", "agradeço"] },
+    "reply": "Obrigad@ pela mensagem! Qualquer coisa, estou por aqui 😊"
   },
+
   {
-    "id": "quebra_sem_foto",
+    "id": "pos_envio_urgencia_atraso",
     "active": true,
-    "match": { "any_contains": ["quebrado", "rachado", "defeito", "trincado", "danificado"], "none_contains": ["foto"] },
-    "reply": "Oii, espero que esteja bem. Sinto muito por isso! Para que eu possa te ajudar da melhor forma e o mais rápido possível, você poderia me enviar uma foto do item? Assim consigo entender melhor o que aconteceu e buscar a melhor solução para você."
+    "match": {
+      "any_contains": ["vai demorar", "urgente", "prioridade", "evento", "não chegar", "se não chegar", "preciso que chegue", "até dia", "prazo já venceu", "preciso para"],
+      "none_contains": ["pagar", "finalizar pagamento", "boleto"]
+    },
+    "reply": "Entendi sua urgência e já verifiquei que o pedido está em trânsito. Vou abrir uma verificação com a transportadora para tentar acelerar e te mantenho atualizado(a). A previsão pode variar por rota, mas acompanho de perto e te aviso de qualquer mudança. Se preferir, também posso avaliar alternativas (retirada em ponto ou cancelamento/reembolso). O que você prefere?"
   },
+
   {
-    "id": "quebra_com_foto",
+    "id": "upgrade_frete",
     "active": true,
-    "match": { "all_contains": ["quebrado", "quebrou", "quebrado em duas partes", "produto veio danificado", "troca urgente", "enviam outro", "enviam outra", "desesperad", "solto", "descolado"] },
-    "reply": "Olá! Sentimos muito pelo ocorrido. Podemos resolver de 3 formas:\n- Reembolso parcial — você fica com o produto e recebe parte do valor de volta.\n- Devolução pelo app da Shopee — com reembolso total após o retorno.\n- Envio de nova peça — sem custo pela peça, você paga apenas o frete, e não precisa devolver nada.\nMe avisa qual opção prefere que resolvo tudo por aqui!"
+    "match": {
+      "any_contains": ["frete mais rápido", "trocar o frete", "mudar o frete", "frete expresso", "pago a diferença", "pagar a diferença"],
+      "none_contains": ["boleto", "pix pendente", "não paguei"]
+    },
+    "reply": "Consigo tentar alterar o frete enquanto o pedido ainda não foi postado. Me confirma por favor o número do pedido e a modalidade desejada? Se já estiver postado, não dá para trocar a modalidade, mas posso abrir pedido de aceleração com a transportadora e te acompanho de perto. Caso tenha custo extra, te informo antes de prosseguir. Pode ser?"
   },
+
   {
-    "id": "reembolso_parcial",
+    "id": "duvida_paineis_modelos",
     "active": true,
-    "match": { "any_contains": ["reembolso parcial", "parcial"] },
-    "reply": "Olá! Para solicitar o reembolso parcial, siga estes passos:\n1- Acesse Minhas Compras no app da Shopee\n2- Selecione o pedido\n3- Clique em Devolver/Reembolsar\n4- Escolha Reembolso Parcial e adicione fotos e descrição do problema.\nQualquer dúvida, estamos aqui para ajudar!"
+    "match": {
+      "any_contains": ["painel", "painéis", "meia lua", "romano", "picolé", "painel pequeno", "modelo dos painéis"],
+      "none_contains": ["cilindro", "cilindros", "trio compacto"]
+    },
+    "reply": "Esse kit acompanha 3 painéis: 2 modelos meia lua e 1 romano (estilo picolé). Se quiser, te envio foto/medidas para conferir como fica montado com a cômoda. Quer ver?"
   },
+
   {
-    "id": "nova_peca",
+    "id": "painel_pequeno_incluso",
     "active": true,
-    "match": { "any_contains": ["nova peça", "enviar outra", "pagar frete", "quanto frete"] },
-    "reply": "Geralmente o frete sai baratinho, e você consegue usar cupom de frete grátis Shopee, caso tenha. Você pode calcular o frete por este anúncio de R$2,00, e pode fazer a compra dele para receber um trio totalmente novo."
+    "match": {
+      "any_contains": ["vem o painel pequeno", "painel pequeno junto", "painel menor"],
+      "none_contains": ["cilindro", "trio"]
+    },
+    "reply": "Sim, o conjunto inclui o painel pequeno correspondente ao modelo do anúncio. Posso te mandar a lista exata dos itens e medidas. Quer?"
   },
-  {
-    "id": "devolucao_total",
-    "active": true,
-    "match": { "any_contains": ["devolução", "reembolso total", "devolver"] },
-    "reply": "As devoluções, trocas e reembolsos são feitos pela Shopee. É preciso devolver todo o kit. Para isso, vá até 'A caminho' em 'Minhas compras' > selecione o pedido > clique em 'Pedido de Reembolso'. Em seguida, selecione o motivo, forneça evidências e descrição (se aplicável) e clique em 'Enviar'."
-  },
+
   {
     "id": "faltando_peca",
     "active": true,
     "match": { "any_contains": ["faltou", "faltando", "não veio", "nao veio", "veio faltando", "sem peça", "sem parafuso"] },
-    "reply": "Oii, tudo bem? Peço desculpas por isso, posso te enviar a peça que faltou, ou se preferir posso fazer seu reembolso. O que você prefere?"
+    "reply": "Poxa, sinto muito por isso. Posso resolver de duas formas: 1) envio da peça que faltou (se o erro foi nosso, arcamos com o frete), ou 2) reembolso parcial do valor. Me diz qual prefere que eu já providencio. Se puder, me envie uma foto para registro, por favor."
   },
+
   {
-    "id": "pedido_cancelado",
+    "id": "quebra_sem_foto",
     "active": true,
-    "match": { "any_contains": ["pedido cancelado", "foi cancelado", "cancelaram"] },
-    "reply": "Olá! Sinto muito pelo problema na entrega, sei como isso pode ser frustrante. A Shopee Express é responsável por todo o processo, e infelizmente não temos controle sobre o ocorrido. Esses erros também nos prejudicam. Mas não se preocupe! Você pode entrar em contato com o suporte da Shopee pelo app, na seção 'Ajuda'. Enquanto isso, para compensar o transtorno, posso te oferecer um cupom de desconto caso ainda tenha interesse na peça. O que acha?"
+    "match": { "any_contains": ["quebrado", "rachado", "defeito", "trincado", "danificado"], "none_contains": ["foto"] },
+    "reply": "Sinto muito pelo ocorrido! Para agilizar, pode me enviar uma foto do item e da embalagem? Assim registro corretamente e já encaminho a solução (reposição, reembolso parcial ou devolução)."
   },
+
+  {
+    "id": "quebra_com_foto",
+    "active": true,
+    "match": { "any_contains": ["quebrou", "quebrado em duas partes", "produto veio danificado", "troca urgente", "enviam outro", "enviam outra", "desesperad", "solto", "descolado", "rachado", "defeito", "trincado", "danificado", "foto"] },
+    "reply": "Obrigado pelas fotos e desculpe o transtorno. Posso resolver de 3 formas: 1) reembolso parcial (você fica com o produto), 2) devolução pelo app com reembolso total após retorno, 3) envio de nova peça. Se o erro foi nosso, o frete de reenvio é por nossa conta. Me diga qual prefere."
+  },
+
+  {
+    "id": "reembolso_parcial",
+    "active": true,
+    "match": { "any_contains": ["reembolso parcial", "parcial"] },
+    "reply": "Para solicitar pelo app: Minhas Compras > pedido > Devolver/Reembolsar > Reembolso Parcial. Anexe fotos e descreva o ocorrido. Assim que abrir, me avise por aqui para eu acompanhar de perto, por favor."
+  },
+
+  {
+    "id": "devolucao_total",
+    "active": true,
+    "match": { "any_contains": ["devolução", "reembolso total", "devolver"] },
+    "reply": "Devoluções e reembolsos são feitos pelo app da Shopee. Vá em Minhas Compras > selecione o pedido > Pedido de Reembolso, escolha o motivo e anexe as evidências. Qualquer dificuldade, me chama aqui que te auxilio no passo a passo."
+  },
+
   {
     "id": "pedido_parado",
     "active": true,
     "match": { "any_contains": ["pedido parado", "não anda", "não atualiza", "sem movimentação", "ta parado"] },
-    "reply": "Sinto muito pelo problema com a entrega, entendo o quanto isso pode ser frustrante. Infelizmente, como a Shopee é responsável pelo envio, não tenho controle direto sobre a situação, mas estou aqui para ajudar no que for possível!\n\nJá abri um chamado reforçando a urgência do seu caso. Além disso, você pode entrar em contato diretamente com o suporte da Shopee pelo app, na seção 'Ajuda'."
+    "reply": "Entendo como é chato ver o rastreio parado. Já abri um chamado com a transportadora e acompanho seu caso. Te aviso assim que houver atualização. Se preferir, também posso avaliar alternativas como ponto de retirada. Tudo bem para você?"
   },
+
   {
-    "id": "cilindro_pequeno",
+    "id": "pedido_cancelado",
+    "active": true,
+    "match": { "any_contains": ["pedido cancelado", "foi cancelado", "cancelaram"] },
+    "reply": "Sinto muito pelo ocorrido. O cancelamento é processado pela Shopee/transportadora. Posso verificar o motivo e te oferecer um cupom compensatório, se desejar refazer o pedido. Quer que eu cheque agora?"
+  },
+
+  {
+    "id": "tempo_envio",
     "active": true,
     "match": {
-      "any_contains": ["cilindro pequeno", "cilindro não é grande", "cilindro errado", "cilindros compactos", "trio compacto"],
-      "none_contains": ["arco", "arcos", "painel", "painel pequeno", "painel grande", "arco de balão", "arco menor", "diâmetro do arco"]
+      "any_contains": ["quanto tempo", "demora para enviar", "quando envia", "prazo de envio"],
+      "none_contains": ["já paguei", "ja paguei", "já comprei", "ja comprei", "shipped", "enviado", "em trânsito", "in transit", "rastrei", "rastreamento", "postado"]
     },
-    "reply": "Boa tarde! Tudo bem? Poxa, sinto muito pela confusão. Esse anúncio é referente ao trio compacto (3 peças menores), como mostramos na descrição e nas imagens com as medidas. Para alcançar o tamanho padrão, muitos clientes usam 2 trios compactos. Se quiser completar, posso te oferecer 25% de desconto no segundo trio!"
+    "reply": "Enviamos no próximo dia útil e o prazo médio de transporte é de 3 a 5 dias úteis após a postagem. Qual a sua cidade/CEP? Vejo a estimativa mais precisa para você."
   },
+
+  {
+    "id": "prazo_entrega_data_especifica",
+    "active": true,
+    "match": {
+      "any_contains": ["chegue até", "chegar até", "até o dia", "preciso para", "prazo até", "aniversário", "urgente", "final de semana", "data específica"],
+      "none_contains": ["já paguei", "ja paguei", "já comprei", "ja comprei", "shipped", "enviado", "em trânsito", "in transit", "rastrei", "rastreamento", "postado"]
+    },
+    "reply": "Consigo postar no próximo dia útil e, em média, a entrega leva de 3 a 5 dias úteis. Não consigo prometer data exata, mas posso te sugerir a opção de frete mais rápida disponível. Me passa o CEP para eu confirmar a estimativa?"
+  },
+
+  {
+    "id": "embalagem_segura_precompra",
+    "active": true,
+    "match": {
+      "any_contains": ["embalado", "embalagem", "amassar", "amassado", "amassam", "avaria", "frágil", "fragil", "quebrar no envio", "bem embalado"],
+      "none_contains": ["recebi", "chegou", "veio", "foto", "reembolso", "devolver", "devolução", "já comprei", "já paguei"]
+    },
+    "reply": "Caprichamos na embalagem: proteção interna e caixa reforçada para evitar avarias. Se algo acontecer, te ajudamos pelo app (troca, reposição ou reembolso)."
+  },
+
+  {
+    "id": "solicita_etiqueta_fragil",
+    "active": true,
+    "match": { "any_contains": ["frágil", "fragil", "aviso na embalagem", "etiqueta frágil", "danos no transporte", "cuidar no transporte"] },
+    "reply": "Colocamos etiqueta FRÁGIL e reforçamos a proteção interna. Deixo marcado aqui para sua remessa 👍"
+  },
+
+  {
+    "id": "duvida_caracteristica_produto",
+    "active": true,
+    "match": { "any_contains": ["furinho", "furo", "tem furo", "furação", "parafusar", "medida", "tamanho", "material"] },
+    "reply": "Alguns modelos já vão com furo, outros podemos personalizar. Me diz o modelo/variação que quer e eu confirmo agora. Se preferir, vejo opção com/sem furo para você 😉"
+  },
+
   {
     "id": "pix_pendente",
     "active": true,
     "match": { "any_contains": ["pix", "comprovante", "reembolso nao caiu", "não recebi o pix", "não caiu"] },
     "action": "skip"
   },
+
   {
     "id": "fallback",
     "active": true,
     "match": { "any_contains": [] },
     "reply": "Desculpe, não entendi muito bem sua mensagem. Você poderia explicar um pouco melhor para que eu consiga te ajudar?"
-  },
-  {
-  "id": "embalagem_segura_precompra",
-  "active": true,
-  "match": { 
-    "any_contains": ["embalado", "embalagem", "amassar", "amassado", "amassam", "avaria", "frágil", "fragil", "quebrar no envio", "bem embalado"],
-    "none_contains": ["recebi", "chegou", "veio", "foto", "reembolso", "devolver", "devolução"]
-  },
-  "reply": "Oii! A gente capricha bastante na embalagem: usamos proteção interna e caixa reforçada para evitar amassar/avarias no transporte. Se acontecer qualquer imprevisto, te ajudamos com a solução pelo app da Shopee (reembolso, troca ou reposição). Pode comprar tranquilo(a) 🙂"
-},
-  {
-  "id": "prazo_entrega_data_especifica",
-  "active": true,
-  "match": { 
-    "any_contains": ["chegue até", "chegar até", "até o dia", "preciso para", "prazo até", "aniversário", "urgente", "final de semana", "data específica"],
-    "none_contains": ["recebi", "veio", "chegou"]
-  },
-  "reply": "Oii! Enviamos no próximo dia útil e o prazo médio é de 3 a 5 dias úteis após a postagem. Por ser logística da Shopee, não consigo prometer uma data exata, mas recomendo finalizar hoje e escolher o frete mais rápido disponível. Assim que postar, te mando o rastreio e acompanho de perto para te ajudar. Pode ser?"
-},
-  {
-  "id": "saudacao_expectativa_positiva",
-  "active": true,
-  "match": {
-    "any_contains": ["ansioso", "espero que venha perfeito", "venha perfeito", "ansiosa", "tomara que venha", "chegue certinho"]
-  },
-  "reply": "Boa noite! Obrigado pela confiança 🙏 Caprichamos na embalagem (proteção interna + caixa reforçada) e conferimos cada peça antes do envio. Assim que postar, te envio o rastreio. Qualquer coisa, estou aqui! 😊"
-},
-  {
-  "id": "solicita_etiqueta_fragil",
-  "active": true,
-  "match": { "any_contains": ["frágil", "fragil", "aviso na embalagem", "etiqueta frágil", "danos no transporte", "cuidar no transporte"] },
-  "reply": "Claro! Colocamos etiqueta **FRÁGIL** na caixa e reforçamos a proteção interna. A entrega é feita pela Shopee, mas essa sinalização ajuda bastante no manuseio. Pode deixar que já vou marcar aqui 😉"
-},
-  {
-  "id": "duvida_caracteristica_produto",
-  "active": true,
-  "match": { "any_contains": ["furinho", "furo", "tem furo", "furação", "parafusar", "medida", "tamanho", "material"] },
-  "reply": "Ótima pergunta! Alguns modelos já vão com furo, outros podem ser personalizados. Me diz qual modelo/variação você quer e eu te confirmo agora. Se preferir, vejo a opção com/sem furo para você 😉"
-}
-,
-  {
-  "id": "manual_montagem",
-  "active": true,
-  "match": { "any_contains": ["video montagem", "vídeo montagem", "manual montagem", "como monta", "como montar", "montagem do arco", "tem o manual", "instruções de montagem"] },
-  "reply": "O arco redondo é montado com 6 partes curvadas, 4 travas, 2 pés e 12 parafusos. Aqui está o manual em vídeo: https://youtu.be/BHirxN8hsL4\\n\\nJá o arco romano é montado com 4 partes retas (sendo 2 com rasgo na ponta), 2 partes curvadas, 2 pés arredondados, 5 travas e 10 parafusos. Manual em vídeo: https://www.youtube.com/watch?v=D-lNjLbDEmg"
-}
+  }
 ]
