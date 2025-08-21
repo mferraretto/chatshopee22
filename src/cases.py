@@ -20,7 +20,7 @@ HEADER = [
     "variacao",
     "sku",
     "problema",
-    "ultima_msg_comprador",
+    "ultimas_7_msgs_comprador",
 ]
 
 LABEL_HEADER = [
@@ -78,7 +78,9 @@ def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
     problema = infer_problema(buyer_only)
 
     _ensure_header()
-    ultima_msg = buyer_only[-1].strip().replace("\n", " ") if buyer_only else ""
+    ultimas_msgs = " | ".join(
+        m.strip().replace("\n", " ") for m in buyer_only[-7:]
+    )
 
     row = [
         datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -89,7 +91,7 @@ def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
         order_info.get("variation", ""),
         order_info.get("sku", ""),
         problema,
-        ultima_msg,
+        ultimas_msgs,
     ]
 
     with CSV_PATH.open("a", newline="", encoding="utf-8") as f:
