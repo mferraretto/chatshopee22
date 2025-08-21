@@ -87,22 +87,41 @@ async def get_current_conversation_id(page) -> str:
     return ""
 
 
-async def click_thread_row(page, i: int):
+async def safe_open_thread_by_index(page, i: int) -> bool:
     rows = page.locator(THREAD_ROW_SEL)
-    li = rows.nth(i)
-    await li.scroll_into_view_if_needed()
-    await li.wait_for(state="visible", timeout=5000)
-    await li.click()
+    row = rows.nth(i)
 
+    await row.scroll_into_view_if_needed()
+    await row.wait_for(state="visible", timeout=8000)
 
-async def open_thread_by_index(page, i: int) -> bool:
-    before = await get_current_conversation_id(page)
-    await click_thread_row(page, i)
+    try:
+        await row.locator("a[href]").evaluate_all(
+            "(as)=>as.forEach(a=>{a.removeAttribute('href');a.removeAttribute('target');})"
+        )
+    except Exception:
+        pass
+
+    url_before = page.url
+    conv_before = await get_current_conversation_id(page)
+
+    try:
+        await row.click(no_wait_after=True)
+    except Exception as e:
+        print(f"[DEBUG] safe_open_thread_by_index click error: {e}")
+        return False
+
     for _ in range(20):
         await page.wait_for_timeout(150)
-        after = await get_current_conversation_id(page)
-        if after and after != before:
+        conv_after = await get_current_conversation_id(page)
+        if conv_after and conv_after != conv_before and page.url == url_before:
             return True
+
+    if page.url != url_before:
+        try:
+            await page.go_back()
+            await page.wait_for_timeout(300)
+        except Exception:
+            pass
     print("[DEBUG] conversa não trocou ao clicar no índice", i)
     return False
 
@@ -127,7 +146,7 @@ async def iterate_threads(page, max_threads=300):
             count = await rows.count()
             if idx >= count:
                 break
-        ok = await open_thread_by_index(page, idx)
+        ok = await safe_open_thread_by_index(page, idx)
         if not ok:
             idx += 1
             continue
