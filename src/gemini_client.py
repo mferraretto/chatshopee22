@@ -1,6 +1,7 @@
 # gemini_client.py
 import google.generativeai as genai
 from .config import settings
+from .firebase_client import get_product_by_sku
 
 
 def get_gemini():
@@ -88,10 +89,22 @@ def _order_stage_context(order_info: dict | None) -> str:
 
 
 def generate_reply(history: str, order_info: dict | None = None) -> str:
-    """Gera resposta direta com base nas últimas mensagens + contexto do pedido."""
+    """Gera resposta direta com base nas últimas mensagens + contexto do pedido.
+
+    Também garante que, se houver um SKU disponível, os dados do produto
+    correspondente sejam recuperados do sistema de produtos e enviados como
+    contexto ao Gemini."""
     if not settings.gemini_api_key:
         return ""
     try:
+        if order_info and not order_info.get("product_info"):
+            sku = order_info.get("sku")
+            if sku:
+                prod = get_product_by_sku(sku)
+                if prod:
+                    order_info = dict(order_info)
+                    order_info["product_info"] = prod
+
         model = get_gemini()
         contexto = _order_stage_context(order_info)
         prod = order_info.get("product_info") if order_info else None
