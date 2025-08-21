@@ -21,11 +21,94 @@ from .cases import (
     mark_conversation_skipped,
 )
 
+
+def normalize_selectors(SEL: dict) -> dict:
+    S = dict(SEL)
+
+    S.setdefault(
+        "messages_container",
+        SEL.get("message_container", "ul.message_main, ul.message_main.watermark_shopee"),
+    )
+
+    S.setdefault(
+        "buyer_bubbles",
+        SEL.get(
+            "buyer_message",
+            "ul.message_main li.lt .msg_text .text_cont, ul.message_main li.lt .text_cont",
+        ),
+    )
+    S.setdefault("buyer_bubbles_fallback", "ul.message_main li.lt .text_cont")
+
+    S.setdefault(
+        "seller_bubbles",
+        SEL.get(
+            "seller_message",
+            "ul.message_main li.rt .msg_text .text_cont, ul.message_main li.rt .text_cont",
+        ),
+    )
+    S.setdefault("seller_bubbles_fallback", "ul.message_main li.rt .text_cont")
+
+    S.setdefault(
+        "chat_list_item",
+        ".list_container_content .virtual_list .list > li, .contact_list .virtual_list .list > li, ul.chat_list > li",
+    )
+    S.setdefault(
+        "chat_list_root",
+        ".list_container_content .virtual_list, .contact_list .virtual_list, ul.chat_list",
+    )
+
+    S.setdefault("status_badge", SEL.get("order_status_tag", "div.order_item_status .el-tag"))
+
+    S.setdefault("order_items_root", "div.order_item_products")
+    S.setdefault("order_item", "div.order_item_products_item")
+    S.setdefault("item_title", SEL.get("product_title", ".order_item_products .product_url"))
+    S.setdefault(
+        "item_variation",
+        SEL.get("product_variation", ".order_item_products_item_info_variation_name span"),
+    )
+    S.setdefault("item_sku", SEL.get("product_sku", ".order_item_products_item_info_sku span"))
+    S.setdefault(
+        "item_price_block",
+        SEL.get("product_price", ".product_other_info > div:nth-child(1)"),
+    )
+    S.setdefault(
+        "item_qty_block",
+        SEL.get(
+            "product_qty",
+            ".product_other_info > div:nth-child(2), .product_other_info > div:nth-child(3)",
+        ),
+    )
+
+    S.setdefault("input_textarea", "textarea, [contenteditable='true']")
+    S.setdefault("send_button", "button:has-text('Send'), button:has-text('Enviar')")
+
+    return S
+
+
 # Carrega seletores configuráveis
 SEL = json.loads(
     (Path(__file__).resolve().parents[1] / "config" / "selectors.json").read_text(
         encoding="utf-8"
     )
+)
+SEL = normalize_selectors(SEL)
+
+
+def load_rules(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"[WARN] rules.json inválido: {e}. Usando defaults.")
+        return {
+            "reply_when_no_buyer_msgs": True,
+            "skip_if_prior_offer_and_no_buyer_reply": True,
+        }
+
+
+RULES_CFG = load_rules(Path(__file__).resolve().parents[1] / "rules.json")
+REPLY_WHEN_NO_BUYER_MSGS = RULES_CFG.get("reply_when_no_buyer_msgs", True)
+PULAR_QUANDO_JA_HOUVE_OFERTA_SEM_RESPOSTA_DO_COMPRADOR = RULES_CFG.get(
+    "skip_if_prior_offer_and_no_buyer_reply", True
 )
 
 
@@ -35,36 +118,18 @@ def dbg(tag, data):
     except Exception as e:
         print(f"[DEBUG] {tag}: <unprintable> {e}")
 
-RESPONDER_MESMO_SE_ULTIMA_FOR_SELLER = True
-PULAR_QUANDO_JA_HOUVE_OFERTA_SEM_RESPOSTA_DO_COMPRADOR = True
 
-THREAD_LIST_SEL = SEL.get(
-    "chat_list_root",
-    "div.session_list, ul.session_list, div.chat_list",
-)
 
-_root_parts = [s.strip() for s in THREAD_LIST_SEL.split(",")]
-_default_rows = []
-for r in _root_parts:
-    _default_rows.extend(
-        [f"{r} > ul > li", f"{r} li.session_item", f"{r} li[role='listitem']"]
-    )
-
-THREAD_ROW_SEL = SEL.get("chat_list_item", ", ".join(_default_rows))
+THREAD_LIST_SEL = SEL["chat_list_root"]
+THREAD_ROW_SEL = SEL["chat_list_item"]
 UNREAD_BADGE_SEL = ".unread, .red_point, .badge"
 
 TS_ONLY_RE = re.compile(r"^\d{2}/\d{2}\s+\d{2}:\d{2}$")
 NOISE = ("FAQ History", "[The referenced message cannot be found]")
 ALL_ITEMS_SEL = "ul.message_main li[class*='lt'], ul.message_main li[class*='rt']"
 
-MESSAGES_CONTAINER_SEL = SEL.get(
-    "messages_container",
-    "ul.message_main, ul.message_main.watermark_shopee",
-)
-STATUS_BADGE_SEL = SEL.get(
-    "status_badge",
-    "div.order_item_status .el-tag",
-)
+MESSAGES_CONTAINER_SEL = SEL["messages_container"]
+STATUS_BADGE_SEL = SEL["status_badge"]
 
 WANTS_PARTS_RE = re.compile(
     r"(quero|prefiro|pode|manda|mandar|envia|enviar|me envia|me mandar).{0,25}(peça|peças|pecas|as peças|as pecas|a peça|a peca)",
@@ -360,27 +425,27 @@ async def get_status_consolidated(page) -> str:
 
 
 async def get_order_items(page) -> list[dict]:
-    await page.wait_for_selector(SEL.get("order_items_root", ""), timeout=15000)
+    await page.wait_for_selector(SEL["order_items_root"], timeout=15000)
     items = []
-    for h in await page.query_selector_all(SEL.get("order_item", "")):
+    for h in await page.query_selector_all(SEL["order_item"]):
         title = await h.eval_on_selector(
-            SEL.get("item_title", ""),
+            SEL["item_title"],
             "el => el.textContent || ''",
         )
         variation = await h.eval_on_selector(
-            SEL.get("item_variation", ""),
+            SEL["item_variation"],
             "el => el.getAttribute('title') || el.textContent || ''",
         )
         sku = await h.eval_on_selector(
-            SEL.get("item_sku", ""),
+            SEL["item_sku"],
             "el => el.getAttribute('title') || el.textContent || ''",
         )
         price_txt = await h.eval_on_selector(
-            SEL.get("item_price_block", ""),
+            SEL["item_price_block"],
             "el => el.textContent || ''",
         )
         qty_txt = await h.eval_on_selector(
-            SEL.get("item_qty_block", ""),
+            SEL["item_qty_block"],
             "el => el.textContent || ''",
         )
         items.append(
@@ -591,7 +656,7 @@ class DuokeBot:
         visíveis.
         """
         chat_list_container = SEL.get("chat_list_container", "")
-        chat_list_item = SEL.get("chat_list_item", "ul.chat_list li")
+        chat_list_item = SEL["chat_list_item"]
         try:
             if chat_list_container:
                 sel = f"{chat_list_container}, {chat_list_item}, ul.message_main"
@@ -714,7 +779,7 @@ class DuokeBot:
         # Caso contrário, espera o chat aparecer
         try:
             chat_list_container = SEL.get("chat_list_container", "")
-            chat_list_item = SEL.get("chat_list_item", "ul.chat_list li")
+            chat_list_item = SEL["chat_list_item"]
             if chat_list_container:
                 await page.wait_for_selector(
                     f"{chat_list_container}, {chat_list_item}, ul.message_main",
@@ -802,7 +867,7 @@ class DuokeBot:
     # ---------- navegação entre conversas ----------
 
     def conversations(self, page):
-        return page.locator(SEL.get("chat_list_item", "ul.chat_list li"))
+        return page.locator(SEL["chat_list_item"])
 
     async def open_conversation_by_index(self, page, idx: int) -> bool:
         conv_locator = self.conversations(page)
@@ -814,9 +879,9 @@ class DuokeBot:
 
         # Aguarda painel renderizar
         try:
-            if SEL.get("messages_container"):
-                await page.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=9000)
-            await page.wait_for_function(
+            f = await get_chat_frame(page)
+            await f.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=9000)
+            await f.wait_for_function(
                 """() => {
                     const ul = document.querySelector('ul.message_main');
                     return ul && ul.children && ul.children.length > 0;
@@ -843,31 +908,30 @@ class DuokeBot:
         """Retorna últimos N [(role,text)], role ∈ {'buyer','seller'}."""
         out: list[tuple[str, str]] = []
         try:
-            items = page.locator("ul.message_main > li")
+            f = await get_chat_frame(page)
+            items = f.locator("ul.message_main > li")
 
-            # Força mais histórico: rola ao topo algumas vezes
-            try:
-                container = page.locator(
-                    SEL.get("messages_container", "ul.message_main")
-                ).first
+            container = f.locator(SEL["messages_container"]).first
+            if await container.count():
                 for _ in range(3):
                     await container.evaluate("(el) => { el.scrollTop = 0; }")
                     await page.wait_for_timeout(120)
-            except Exception:
-                pass
 
             texts = await items.evaluate_all(
                 """
-                (els) => els.map(li => {
-                    const cls = (li.className || '').toLowerCase();
-                    const role = cls.includes('lt') ? 'buyer' : (cls.includes('rt') ? 'seller' : 'system');
-                    const txtNode = li.querySelector('div.text_cont, .bubble .text, .record_item .content');
-                    const txt = (txtNode?.innerText || '').trim();
-                    return txt && role !== 'system' ? [role, txt] : null;
-                }).filter(Boolean)
+          (els) => els.map(li => {
+            const cls = (li.className||'').toLowerCase();
+            const role = cls.includes('lt') ? 'buyer' : (cls.includes('rt') ? 'seller' : 'system');
+            const node = li.querySelector('div.msg_cont div.msg_text div.text_cont, .text_cont, .bubble .text, .record_item .content');
+            const raw = (node?.innerText || '').trim();
+            if (!raw) return null;
+            if (/^\d{2}\/\d{2}\s+\d{2}:\d{2}$/.test(raw)) return null;
+            if (raw.includes('FAQ History') || raw.includes('[The referenced message cannot be found]')) return null;
+            return role !== 'system' ? [role, raw] : null;
+          }).filter(Boolean)
             """
             )
-            out = texts[-depth:]
+            out = texts.slice(Math.max(0, texts.length - depth))
         except Exception:
             pass
         return out
@@ -1203,7 +1267,7 @@ class DuokeBot:
     async def get_order_bits(page):
         """Lê status/desc/track + produto/variação/SKU do painel direito usando SEL."""
         status_tag = await DuokeBot._text_or_empty(
-            page.locator(SEL.get("order_status_tag", ""))
+            page.locator(SEL["status_badge"])
         )
 
         log_status_el = page.locator(SEL.get("logistics_status", ""))
@@ -1218,11 +1282,11 @@ class DuokeBot:
             page.locator(SEL.get("latest_logistics_description", ""))
         )
         tracking = await DuokeBot._text_or_empty(page.locator(SEL.get("tracking_number", "")))
-        product = await DuokeBot._text_or_empty(page.locator(SEL.get("product_title", "")))
+        product = await DuokeBot._text_or_empty(page.locator(SEL["item_title"]))
         variation = await DuokeBot._text_or_empty(
-            page.locator(SEL.get("product_variation", ""))
+            page.locator(SEL["item_variation"])
         )
-        sku = await DuokeBot._text_or_empty(page.locator(SEL.get("product_sku", "")))
+        sku = await DuokeBot._text_or_empty(page.locator(SEL["item_sku"]))
 
         status_consolidado = (
             status_tag or logistics_status or latest_desc or "desconhecido"
@@ -1278,12 +1342,8 @@ class DuokeBot:
             await asyncio.sleep(1)
             return
 
-        # Garante que o filtro "precisa responder" seja removido quando queremos
-        # responder mesmo que a última mensagem seja do vendedor
-        if RESPONDER_MESMO_SE_ULTIMA_FOR_SELLER:
-            await self.show_all_conversations(page)
-        else:
-            await self.apply_needs_reply_filter(page)
+        # Sempre lista todas as conversas para processar mesmo que a última seja do vendedor
+        await self.show_all_conversations(page)
 
         max_convs = int(getattr(settings, "max_conversations", 0) or 0)
         i = -1
@@ -1291,9 +1351,9 @@ class DuokeBot:
             i += 1
             await self.pause_event.wait()
             try:
-                if SEL.get("messages_container"):
-                    await page.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=9000)
-                await page.wait_for_function(
+                f = await get_chat_frame(page)
+                await f.wait_for_selector(MESSAGES_CONTAINER_SEL, timeout=9000)
+                await f.wait_for_function(
                     """() => {
                     const ul = document.querySelector('ul.message_main');
                     return ul && ul.children && ul.children.length > 0;
@@ -1388,8 +1448,6 @@ class DuokeBot:
             depth = int(getattr(settings, "history_depth", 8) or 8)
             pairs = await self.read_messages_with_roles(page, depth * 2)
             print(f"[DEBUG] conversa {i}: {len(pairs)} msgs (com role)")
-            if not pairs:
-                continue
 
             print("[DEBUG] Mensagens lidas:")
             for role, msg in pairs:
@@ -1453,6 +1511,9 @@ class DuokeBot:
                 should, reply = result
             except Exception as e:
                 print(f"[DEBUG] erro no hook/classificador: {e}")
+                should, reply = True, RESP_FALLBACK_CURTO
+
+            if not buyer_only and REPLY_WHEN_NO_BUYER_MSGS:
                 should, reply = True, RESP_FALLBACK_CURTO
 
             print(f"[DEBUG] decide: should={should} | Resposta: {reply}")
