@@ -6,6 +6,14 @@
     "reply": "Oii, tudo bem? As compras feitas hoje, são enviadas amanhã pela manhã, e chegam em média de 3 a 5 dias úteis."
   },
   {
+    "id": "duvida_kit",
+    "active": true,
+    "match": {
+      "any_contains": ["o que vai no kit", "o que vem no anuncio", "o que vem no kit", "o que acompanha", "vem com painel", "é só os cilindros", "vem completo", "qual o kit"]
+    },
+    "reply": "Este anúncio permite escolher kits com diferentes peças, cada um com valor diferente. Ex: 69,90 arco redondo, 99 trio sem arco, até 209,00 com trio + 2 arcos."
+  },
+  {
     "id": "quebra_sem_foto",
     "active": true,
     "match": { "any_contains": ["quebrado", "rachado", "defeito", "trincado", "danificado"], "none_contains": ["foto"] },
