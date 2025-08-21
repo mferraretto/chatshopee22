@@ -100,6 +100,7 @@ HTML = Template(
     <a href="#ativo" class="active" id="tab-ativo">Ativo</a>
     <a href="#config" id="tab-config">Configurações</a>
     <a href="#regras" id="tab-regras">Regras</a>
+    <a href="#produtos" id="tab-produtos">Produtos</a>
   </nav>
 
   <main class="wrap">
@@ -208,9 +209,37 @@ HTML = Template(
       </div>
     </section>
 
+    <!-- ABA PRODUTOS -->
+    <section id="pane-produtos" style="display:none;">
+      <div class="card" style="max-width:420px;">
+        <h3>Cadastro de Produtos</h3>
+        <form id="product-form" style="display:flex; flex-direction:column; gap:8px;">
+          <input name="nome" type="text" placeholder="Nome" required />
+          <input name="sku" type="text" placeholder="SKU" required />
+          <textarea name="descricao" rows="4" placeholder="Descrição"></textarea>
+          <input name="medidas" type="text" placeholder="Medidas" />
+          <button>Salvar</button>
+        </form>
+      </div>
+    </section>
+
   </main>
 
-<script>
+  <script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCFQGW574J5Y2N8xq1y-pLzNlLIptEn8_8",
+  authDomain: "chatshopee-5e5a8.firebaseapp.com",
+  projectId: "chatshopee-5e5a8",
+  storageBucket: "chatshopee-5e5a8.firebasestorage.app",
+  messagingSenderId: "196443025078",
+  appId: "1:196443025078:web:60af3b12e1af740f448017"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
 const screen = document.getElementById('screen');
 const reading = document.getElementById('reading');
 const proposed = document.getElementById('proposed');
@@ -278,10 +307,25 @@ async function loadRules() {
 }
 loadRules();
 
-document.getElementById('newRuleBtn').addEventListener('click', () => {
-  const form = document.querySelector('#pane-regras form');
-  form.reset();
-});
+  document.getElementById('newRuleBtn').addEventListener('click', () => {
+    const form = document.querySelector('#pane-regras form');
+    form.reset();
+  });
+
+  const productForm = document.getElementById('product-form');
+  if (productForm) {
+    productForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(productForm).entries());
+      try {
+        await setDoc(doc(db, 'products', data.sku), data);
+        alert('Produto salvo!');
+        productForm.reset();
+      } catch (err) {
+        alert('Erro ao salvar: ' + err);
+      }
+    });
+  }
 
 let ws;
 function connectWS(){

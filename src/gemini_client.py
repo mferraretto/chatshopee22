@@ -94,6 +94,16 @@ def generate_reply(history: str, order_info: dict | None = None) -> str:
     try:
         model = get_gemini()
         contexto = _order_stage_context(order_info)
+        prod = order_info.get("product_info") if order_info else None
+        prod_context = ""
+        if prod:
+            prod_context = (
+                "[Dados do Produto]\n"
+                f"nome: {prod.get('nome','')}\n"
+                f"sku: {prod.get('sku','')}\n"
+                f"descricao: {prod.get('descricao','')}\n"
+                f"medidas: {prod.get('medidas','')}\n\n"
+            )
 
         prompt = f"""{settings.base_prompt}
 
@@ -103,7 +113,7 @@ INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
 - Se a política for "pular" (ex.: pix/comprovante), devolva APENAS: "Ação: skip (pular)".
 - Caso contrário, devolva APENAS a mensagem final em 1–2 frases (sem "ID:", sem "Resposta:", sem análises).
 
-[Contexto do Pedido]
+{prod_context}[Contexto do Pedido]
 {contexto}
 
 [Conversa]
