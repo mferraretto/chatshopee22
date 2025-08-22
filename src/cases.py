@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 from openpyxl import Workbook
 
+from .firebase_client import save_case_document
+
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 CSV_PATH = DATA_DIR / "atendimentos.csv"
@@ -114,12 +116,22 @@ def append_label(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
 
 
 def export_to_excel() -> None:
-    """Converte o CSV de atendimentos para um arquivo Excel."""
+    """Converte o CSV de atendimentos para um arquivo Excel e replica no Firestore."""
     if not CSV_PATH.exists():
         return
+
     wb = Workbook()
     ws = wb.active
+
+    # Carrega o CSV uma vez para gerar o Excel e enviar ao Firestore
     with CSV_PATH.open("r", newline="", encoding="utf-8") as f:
-        for r in csv.reader(f):
-            ws.append(r)
+        reader = list(csv.reader(f))
+
+    for r in reader:
+        ws.append(r)
     wb.save(XLSX_PATH)
+
+    # Envia cada linha (exceto o cabeçalho) para o Firestore
+    with CSV_PATH.open("r", newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            save_case_document(row)
