@@ -974,16 +974,22 @@ class DuokeBot:
                 return ""
 
     @staticmethod
-    def build_history_from_pairs(pairs, max_buyer=8, max_seller_tail=2):
-        """
+    def build_history_from_pairs(pairs, max_depth: int = 20):
+        """Monta histórico rotulado com mensagens de comprador e vendedor.
+
         pairs: lista [(role, text)] em ordem cronológica.
-        Retorna bloco de texto com últimas msgs do comprador + 1-2 do vendedor p/ contexto.
+        Retorna bloco de texto com as últimas ``max_depth`` mensagens, cada
+        uma precedida por ``Comprador:`` ou ``Vendedor:`` para indicar a
+        origem. Essas informações são enviadas ao Gemini como contexto da
+        conversa.
         """
-        buyers = [t for r, t in pairs if r == "buyer"][-max_buyer:]
-        sellers_tail = [t for r, t in pairs if r == "seller"][-max_seller_tail:]
-        want = set(buyers + sellers_tail)
-        merged = [t.strip() for _, t in pairs if t in want]
-        return "\n\n".join(merged)
+
+        recents = pairs[-max_depth:]
+        lines: list[str] = []
+        for role, text in recents:
+            prefix = "Comprador" if role == "buyer" else "Vendedor"
+            lines.append(f"{prefix}: {text.strip()}")
+        return "\n\n".join(lines)
 
     async def _cycle(self, page, decide_reply_fn):
         """Executa um ciclo sobre as conversas visíveis."""
@@ -1067,10 +1073,8 @@ class DuokeBot:
                     )
                     continue
 
-            # Últimas N do comprador + 2 do vendedor para contexto
-            history_block = self.build_history_from_pairs(
-                pairs, max_buyer=depth, max_seller_tail=2
-            )
+            # Últimas mensagens de comprador e vendedor para contexto
+            history_block = self.build_history_from_pairs(pairs, max_depth=depth * 2)
             order_info["history_block"] = history_block
 
             # ----- dedupe por conversa e rate-limit -----
