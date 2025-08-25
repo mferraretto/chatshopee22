@@ -9,7 +9,7 @@ if sys.platform.startswith("win"):
         pass
 # ----------------------------------------------------------------------
 
-import base64, json, time, os, re
+import base64, json, time, os, re, csv
 from pathlib import Path
 from typing import Optional, Set
 from collections import deque
@@ -31,6 +31,7 @@ from src.duoke import DuokeBot
 from src.config import settings
 from src.classifier import decide_reply
 from src.rules import load_rules, save_rules
+from src.cases import export_to_excel
 from playwright.async_api import TimeoutError as PWTimeoutError
 
 # ===== Estado global simples =====
@@ -100,6 +101,7 @@ HTML = Template(
     <a href="#ativo" class="active" id="tab-ativo">Ativo</a>
     <a href="#config" id="tab-config">Configurações</a>
     <a href="#regras" id="tab-regras">Regras</a>
+    <a href="#atendimentos" id="tab-atendimentos">Atendimentos</a>
     <a href="#produtos" id="tab-produtos">Produtos</a>
   </nav>
 
@@ -209,6 +211,32 @@ HTML = Template(
       </div>
     </section>
 
+    <!-- ABA ATENDIMENTOS -->
+    <section id="pane-atendimentos" style="display:none;">
+      <div class="card">
+        <h3>Atendimentos Salvos</h3>
+        <div class="row" style="margin-bottom:8px;">
+          <a class="secondary" href="/export-cases-xlsx" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Exportar Excel</a>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Pedido</th>
+              <th>Status</th>
+              <th>Comprador</th>
+              <th>Produto</th>
+              <th>Variação</th>
+              <th>SKU</th>
+              <th>Problema</th>
+              <th>Últimas msgs</th>
+            </tr>
+          </thead>
+          <tbody id="atendBody"></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- ABA PRODUTOS -->
     <section id="pane-produtos" style="display:none;">
       <div class="card" style="max-width:420px;">
@@ -272,6 +300,7 @@ function switchTab(hash) {
   const pane = document.getElementById('pane-'+hash);
   if (tab && pane) { tab.classList.add('active'); pane.style.display='block'; }
   if (hash === 'regras') { loadRules(); }
+  if (hash === 'atendimentos') { loadAtendimentos(); }
 }
 window.addEventListener('hashchange', () => switchTab(location.hash.slice(1) || 'ativo'));
 switchTab(location.hash.slice(1) || 'ativo');
@@ -303,6 +332,22 @@ async function loadRules() {
       await fetch(`/delete-rule/${encodeURIComponent(btn.dataset.id)}`, { method: 'POST' });
       await loadRules();
     });
+  });
+}
+
+async function loadAtendimentos() {
+  const tbody = document.getElementById('atendBody');
+  tbody.innerHTML = '';
+  let data = [];
+  try {
+    data = await fetch('/cases').then(r => r.json());
+  } catch (e) {
+    console.error('falha ao carregar atendimentos', e);
+  }
+  data.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.timestamp_utc||''}</td><td>${r.order_id||''}</td><td>${r.status||''}</td><td>${r.buyer_name||''}</td><td>${r.produto||''}</td><td>${r.variacao||''}</td><td>${r.sku||''}</td><td>${r.problema||''}</td><td>${r.ultimas_7_msgs_comprador||''}</td>`;
+    tbody.appendChild(tr);
   });
 }
 loadRules();
@@ -473,6 +518,28 @@ async def export_cases():
         return JSONResponse({"ok": False, "error": "Nenhum registro ainda."}, status_code=404)
     # Faz download do CSV
     return FileResponse(str(p), media_type="text/csv", filename="atendimentos.csv")
+
+
+@app.get("/cases")
+async def list_cases():
+    p = Path("data/atendimentos.csv")
+    if not p.exists():
+        return []
+    with p.open("r", newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+@app.get("/export-cases-xlsx")
+async def export_cases_xlsx():
+    export_to_excel()
+    p = Path("data/atendimentos.xlsx")
+    if not p.exists():
+        return JSONResponse({"ok": False, "error": "Nenhum registro ainda."}, status_code=404)
+    return FileResponse(
+        str(p),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename="atendimentos.xlsx",
+    )
 
 
 # Monta /static somente se a pasta existir (evita erro em ambientes sem assets)
