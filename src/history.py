@@ -1,39 +1,105 @@
+"""Conversation history stored in Firestore.
+
+This module replaces the previous local JSON storage and keeps a small
+conversation history for each buyer inside the Firebase collection
+``history``.  Each document uses the buyer name as its document ID and
+contains an array field called ``messages`` with the role and text of each
+message.
+"""
+
+from __future__ import annotations
+
 import json
-from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import List, Tuple
+from urllib.request import Request, urlopen
 
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
-HISTORY_PATH = DATA_DIR / "history.json"
+from .firebase_client import FIREBASE_CONFIG
 
 
-def _load_all() -> Dict[str, List[Dict[str, str]]]:
-    if not HISTORY_PATH.exists():
-        return {}
-    try:
-        with HISTORY_PATH.open("r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+BASE_URL = "https://firestore.googleapis.com/v1"
 
 
-def _save_all(data: Dict[str, List[Dict[str, str]]]) -> None:
-    with HISTORY_PATH.open("w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def _doc_id(name: str) -> str:
+    """Generate a safe Firestore document ID from the buyer name."""
+    return name.replace("/", "_")
 
 
 def get_history(buyer_name: str) -> List[Tuple[str, str]]:
-    data = _load_all()
-    raw = data.get(buyer_name, [])
-    return [(d.get("role", ""), d.get("text", "")) for d in raw]
+    """Return the stored conversation history for ``buyer_name``.
+
+    Each entry is returned as ``(role, text)``.  If the document does not
+    exist or any error occurs, an empty list is returned.
+    """
+
+    if not buyer_name:
+        return []
+    doc_id = _doc_id(buyer_name)
+    url = (
+        f"{BASE_URL}/projects/{FIREBASE_CONFIG['projectId']}/databases/(default)/documents/"
+        f"history/{doc_id}?key={FIREBASE_CONFIG['apiKey']}"
+    )
+    try:
+        with urlopen(url) as resp:
+            data = json.load(resp)
+        values = (
+            data.get("fields", {})
+            .get("messages", {})
+            .get("arrayValue", {})
+            .get("values", [])
+        )
+        out: List[Tuple[str, str]] = []
+        for v in values:
+            f = v.get("mapValue", {}).get("fields", {})
+            role = f.get("role", {}).get("stringValue", "")
+            text = f.get("text", {}).get("stringValue", "")
+            out.append((role, text))
+        return out
+    except Exception:
+        return []
 
 
-def append_history(buyer_name: str, pairs: List[Tuple[str, str]], max_depth: int = 20) -> None:
-    data = _load_all()
-    items = data.get(buyer_name, [])
+def append_history(
+    buyer_name: str, pairs: List[Tuple[str, str]], max_depth: int = 20
+) -> None:
+    """Append conversation ``pairs`` to the buyer history in Firestore."""
+
+    if not buyer_name:
+        return
+    items = get_history(buyer_name)
     for role, text in pairs:
-        entry = {"role": role, "text": text}
+        entry = (role, text)
         if entry not in items:
             items.append(entry)
-    data[buyer_name] = items[-max_depth:]
-    _save_all(data)
+    items = items[-max_depth:]
+
+    doc_id = _doc_id(buyer_name)
+    url = (
+        f"{BASE_URL}/projects/{FIREBASE_CONFIG['projectId']}/databases/(default)/documents/"
+        f"history/{doc_id}?key={FIREBASE_CONFIG['apiKey']}"
+    )
+
+    values = [
+        {
+            "mapValue": {
+                "fields": {
+                    "role": {"stringValue": role},
+                    "text": {"stringValue": text},
+                }
+            }
+        }
+        for role, text in items
+    ]
+    data = {"fields": {"messages": {"arrayValue": {"values": values}}}}
+
+    req = Request(
+        url,
+        data=json.dumps(data).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="PATCH",
+    )
+    try:
+        with urlopen(req) as resp:
+            resp.read()
+    except Exception:
+        pass
+
