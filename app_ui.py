@@ -217,6 +217,7 @@ HTML = Template(
         <h3>Atendimentos Salvos</h3>
         <div class="row" style="margin-bottom:8px;">
           <a class="secondary" href="/export-cases-xlsx" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Exportar Excel</a>
+          <a class="secondary" href="/export-history" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Exportar histórico</a>
         </div>
         <table>
           <thead>
@@ -540,6 +541,14 @@ async def export_cases_xlsx():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename="atendimentos.xlsx",
     )
+
+
+@app.get("/export-history")
+async def export_history():
+    p = Path("data/history.json")
+    if not p.exists():
+        return JSONResponse({"ok": False, "error": "Nenhum histórico ainda."}, status_code=404)
+    return FileResponse(str(p), media_type="application/json", filename="history.json")
 
 
 # Monta /static somente se a pasta existir (evita erro em ambientes sem assets)

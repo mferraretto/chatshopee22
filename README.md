@@ -80,6 +80,11 @@ Por padrão, roda uma varredura a cada 120 segundos (config em `.env`).
 - Dúvidas comuns (envio/rastreio) → templates FAQ.
 - Permite **inserir código de rastreio** caso esteja visível (depende dos seletores e do layout atual).
 
+## Exportar histórico de conversas
+
+A interface web possui um botão **Exportar histórico** na aba *Atendimentos* que permite
+baixar o arquivo `history.json` com todas as mensagens salvas pelo bot.
+
 ## Estrutura
 
 ```
