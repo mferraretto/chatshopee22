@@ -1,4 +1,3 @@
-import asyncio
 import json
 import random
 import re
@@ -10,25 +9,6 @@ from playwright.async_api import Page, TimeoutError as PWTimeoutError
 from .gemini_client import send_product_payload
 
 PROCESSED_ATTR = "data-product-processed"
-API_URL = "https://shopee.com.br/api/v2/item/get?itemid={itemid}&shopid={shopid}"
-CDN_PREFIX = "https://cf.shopee.com.br/file/"
-
-
-def _norm_price(val: Any) -> float | None:
-    try:
-        if val is None:
-            return None
-        return float(val) / 100000 if isinstance(val, (int, float)) else None
-    except Exception:
-        return None
-
-
-def _image_url(hash_: str | None) -> str | None:
-    if not hash_:
-        return None
-    if hash_.startswith("http"):
-        return hash_
-    return f"{CDN_PREFIX}{hash_}"
 
 
 async def detect_product_cards(page: Page, pairs: List[tuple[str, str]]) -> None:
@@ -95,70 +75,31 @@ async def extract_product_data(page: Page) -> Dict[str, Any]:
     }
     source = None
 
-    if shop_id and item_id:
-        try:
-            resp = await page.request.get(API_URL.format(itemid=item_id, shopid=shop_id))
-            if resp.ok:
-                data = await resp.json()
-                item = data.get("item") or {}
-                produto.update(_parse_api_item(item))
-                source = "api"
-        except Exception:
-            pass
+    ld = await _parse_ld_json(page)
+    if ld:
+        produto.update(ld)
+        source = source or "ld+json"
 
-    if not produto.get("name"):
-        ld = await _parse_ld_json(page)
-        if ld:
-            produto.update(ld)
-            source = source or "ld+json"
+    meta = await _parse_meta(page)
+    if meta:
+        for k, v in meta.items():
+            produto.setdefault(k, v)
+        source = source or "metatags"
 
-    if not produto.get("name"):
-        dom = await _parse_dom(page)
-        produto.update(dom)
+    dom = await _parse_dom(page)
+    if dom:
+        for k, v in dom.items():
+            produto.setdefault(k, v)
         source = source or "dom"
+
+    if produto.get("images"):
+        produto["images"] = list(dict.fromkeys(filter(None, produto["images"])))
+    if "variations" not in produto:
+        produto["variations"] = []
 
     produto["timestamp"] = datetime.utcnow().isoformat()
     produto["source"] = source
     return produto
-
-
-def _parse_api_item(item: Dict[str, Any]) -> Dict[str, Any]:
-    rating_info = item.get("item_rating") or {}
-    return {
-        "name": item.get("name"),
-        "description": (item.get("description") or "")[:500],
-        "brand": item.get("brand"),
-        "sku": item.get("item_sku"),
-        "priceMin": _norm_price(item.get("price_min")),
-        "priceMax": _norm_price(item.get("price_max")),
-        "priceBeforeDiscount": _norm_price(item.get("price_before_discount")),
-        "stock": item.get("stock"),
-        "historicalSold": item.get("historical_sold"),
-        "soldRecent": item.get("sold"),
-        "rating": rating_info.get("rating_average"),
-        "ratingCount": rating_info.get("rating_count", [0])[-1]
-        if isinstance(rating_info.get("rating_count"), list)
-        else rating_info.get("rating_count"),
-        "images": [
-            img for img in ([_image_url(i) for i in item.get("images", [])] if item.get("images") else [])
-            if img
-        ],
-        "variations": [
-            {
-                "name": m.get("name"),
-                "sku": m.get("sku"),
-                "price": _norm_price(m.get("price")),
-                "stock": m.get("stock"),
-                "image": _image_url(m.get("image")),
-            }
-            for m in item.get("models", [])
-        ]
-        if item.get("has_model")
-        else [],
-        "attributes": [
-            {"name": a.get("name"), "value": a.get("value")} for a in item.get("attributes", [])
-        ],
-    }
 
 
 async def _parse_ld_json(page: Page) -> Dict[str, Any]:
@@ -171,33 +112,103 @@ async def _parse_ld_json(page: Page) -> Dict[str, Any]:
             objs = data if isinstance(data, list) else [data]
             for obj in objs:
                 if isinstance(obj, dict) and obj.get("@type") == "Product":
+                    offers = obj.get("offers") or {}
+                    if isinstance(offers, list):
+                        offers = offers[0] if offers else {}
+                    rating_obj = obj.get("aggregateRating") or offers.get("aggregateRating") or {}
+                    low = offers.get("lowPrice") or offers.get("price")
+                    high = offers.get("highPrice") or offers.get("price")
+                    images = obj.get("image")
+                    images = images if isinstance(images, list) else [images] if images else []
                     return {
                         "name": obj.get("name"),
                         "description": (obj.get("description") or "")[:500],
                         "brand": obj.get("brand", {}).get("name")
                         if isinstance(obj.get("brand"), dict)
                         else obj.get("brand"),
-                        "images": obj.get("image")
-                        if isinstance(obj.get("image"), list)
-                        else [obj.get("image")]
-                        if obj.get("image")
-                        else [],
+                        "sku": obj.get("sku"),
+                        "images": images,
+                        "priceMin": float(low) if low else None,
+                        "priceMax": float(high) if high else None,
+                        "rating": float(rating_obj.get("ratingValue"))
+                        if rating_obj.get("ratingValue")
+                        else None,
+                        "ratingCount": int(
+                            rating_obj.get("reviewCount") or rating_obj.get("ratingCount")
+                        )
+                        if rating_obj.get("reviewCount") or rating_obj.get("ratingCount")
+                        else None,
                     }
     except Exception:
         pass
     return {}
 
 
-async def _parse_dom(page: Page) -> Dict[str, Any]:
+async def _parse_meta(page: Page) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     try:
-        out["name"] = await page.locator("h1").first.inner_text()
+        title = await page.locator('meta[property="og:title"]').get_attribute("content")
+        if title:
+            out["name"] = title
     except Exception:
         pass
     try:
-        price_txt = await page.locator("[class*='price']").first.inner_text()
-        price_txt = price_txt.replace("R$", "").replace(".", "").replace(",", ".").strip()
-        out["priceMin"] = float(price_txt)
+        desc = await page.locator('meta[name="twitter:description"]').get_attribute("content")
+        if not desc:
+            desc = await page.locator('meta[property="og:description"]').get_attribute("content")
+        if desc:
+            out["description"] = desc
+    except Exception:
+        pass
+    try:
+        img = await page.locator('meta[property="og:image"]').get_attribute("content")
+        if img:
+            out["images"] = [img]
+    except Exception:
+        pass
+    price = None
+    try:
+        price = await page.locator('meta[property="og:price:amount"]').get_attribute("content")
+    except Exception:
+        pass
+    if not price:
+        try:
+            price = await page.locator('meta[property="product:price:amount"]').get_attribute("content")
+        except Exception:
+            pass
+    if price:
+        try:
+            val = float(price.replace(",", "."))
+            out["priceMin"] = val
+            out["priceMax"] = val
+        except Exception:
+            pass
+    return out
+
+
+async def _parse_dom(page: Page) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    try:
+        name = await page.locator("h1, .attM6y, .VCNVHn").first.text_content()
+        if name:
+            out["name"] = name.strip()
+    except Exception:
+        pass
+    try:
+        price_block = await page.locator(".pro-price, .V5H2d6").first.text_content()
+        if price_block:
+            prices = re.findall(r"\d+[.,]\d+", price_block.replace("\n", " "))
+            nums = [float(p.replace(".", "").replace(",", ".")) for p in prices]
+            if nums:
+                out["priceMin"] = min(nums)
+                out["priceMax"] = max(nums)
+    except Exception:
+        pass
+    try:
+        variations = await page.locator(
+            ".product-variation, .product-variation-item"
+        ).all_inner_texts()
+        out["variations"] = [v.strip() for v in variations if v.strip()]
     except Exception:
         pass
     return out
