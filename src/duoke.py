@@ -20,6 +20,7 @@ from .cases import (
     append_label as log_label,
     infer_problema,
 )
+from .history import get_history, append_history
 
 # Carrega seletores configuráveis
 SEL = json.loads(
@@ -1045,6 +1046,15 @@ class DuokeBot:
             if not pairs:
                 continue
 
+            buyer_name = (order_info.get("buyer_name") or "").strip()
+            if buyer_name:
+                stored = get_history(buyer_name)
+                if stored:
+                    for p in pairs:
+                        if p not in stored:
+                            stored.append(p)
+                    pairs = stored
+
             buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
             problema = infer_problema(buyer_only)
             wants_parts = bool(buyer_only) and buyer_wants_missing_parts(buyer_only[-1])
@@ -1143,6 +1153,9 @@ class DuokeBot:
             await self.send_reply(page, reply)
             conv_sent.add(norm_reply)
             self.last_replied_at[conv_key] = now
+            if buyer_name:
+                append_history(buyer_name, pairs + [("seller", reply)], max_depth=depth * 2)
+
             await page.wait_for_timeout(
                 int(getattr(settings, "delay_between_actions", 1.0) * 1000)
             )
