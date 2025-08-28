@@ -3,7 +3,63 @@ import google.generativeai as genai
 from .config import settings
 from .firebase_client import get_product_by_sku
 import json
-from typing import Any, Dict
+import re
+from typing import Any, Dict, Literal
+from pydantic import BaseModel, Field, ValidationError
+
+
+class Entities(BaseModel):
+    sku: str = ""
+    pedido: str = ""
+    produto: str = ""
+    medida: str = ""
+
+
+class PolicyFlags(BaseModel):
+    nao_altera_endereco: bool = True
+    nao_cobra_fora_app: bool = True
+
+
+class GeminiResponse(BaseModel):
+    action: Literal["reply", "skip", "ask_clarifying", "escalate"]
+    reply: str
+    intent: str
+    confidence: float
+    entities: Entities = Field(default_factory=Entities)
+    policy_flags: PolicyFlags = Field(default_factory=PolicyFlags)
+    reasons: list[str] = Field(default_factory=list)
+
+
+ADDRESS_RE = re.compile(
+    r"\b(rua|avenida|av\\.?|estrada|bairro|cep|logradouro|end(?:ereç|ereco))\b",
+    re.I,
+)
+OFF_APP_RE = re.compile(
+    r"\b(pix|transfer[êe]ncia|dep[óo]sito|whatsapp|zap|telefone|tel\\.?|boleto|chave)\b",
+    re.I,
+)
+
+
+def validate_reply_text(text: str) -> bool:
+    low = (text or "").lower()
+    if ADDRESS_RE.search(low):
+        return False
+    if OFF_APP_RE.search(low):
+        return False
+    return True
+
+
+JSON_CONTRACT = (
+    "{\n"
+    '  "action":"reply|skip|ask_clarifying|escalate",\n'
+    '  "reply":"...",\n'
+    '  "intent":"medidas|endereco|peca_faltando|reembolso_parcial|pos_venda|...",\n'
+    '  "confidence": 0.0,\n'
+    '  "entities": {"sku":"","pedido":"","produto":"","medida":""},\n'
+    '  "policy_flags":{"nao_altera_endereco":true,"nao_cobra_fora_app":true},\n'
+    '  "reasons":["...","..."]\n'
+    "}"
+)
 
 
 def get_gemini():
@@ -115,14 +171,10 @@ def _order_stage_context(order_info: dict | None) -> str:
     )
 
 
-def generate_reply(history: str, order_info: dict | None = None) -> str:
-    """Gera resposta direta com base nas últimas mensagens + contexto do pedido.
-
-    Também garante que, se houver um SKU disponível, os dados do produto
-    correspondente sejam recuperados do sistema de produtos e enviados como
-    contexto ao Gemini."""
+def generate_reply(history: str, order_info: dict | None = None) -> GeminiResponse | None:
+    """Gera resposta estruturada com base nas últimas mensagens e contexto do pedido."""
     if not settings.gemini_api_key:
-        return ""
+        return None
     try:
         if order_info and not order_info.get("product_info"):
             sku = order_info.get("sku")
@@ -151,29 +203,21 @@ INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
 - Use o contexto do pedido abaixo para entender se é pré-venda, pós-venda, enviado ou entregue.
 - Se estado_pedido for "enviado" ou "entregue", **não** use o template de tempo_envio. Se perguntarem prazo, peça UM esclarecimento objetivo (ex.: “é para este pedido ou um novo?”) sem citar status/rastreio.
 - Se a política for "pular" (ex.: pix/comprovante), devolva APENAS: "Ação: skip (pular)".
-- Caso contrário, devolva APENAS a mensagem final em 1–2 frases (sem "ID:", sem "Resposta:", sem análises).
+- Caso contrário, responda usando APENAS o JSON com o schema abaixo.
 
 {prod_context}[Contexto do Pedido]
 {contexto}
 
 [Conversa]
 {history}
+
+Responda APENAS com um JSON seguindo este schema:
+{JSON_CONTRACT}
 """.strip()
 
         resp = model.generate_content(prompt)
         text = (getattr(resp, "text", "") or "").strip()
-
-        # Higienização: remover aspas externas e evitar "Ação:" indevida
-        if (text.startswith('"') and text.endswith('"')) or (
-            text.startswith("'") and text.endswith("'")
-        ):
-            text = text[1:-1].strip()
-
-        low = text.lower()
-        if low.startswith("ação:") and "skip" not in low:
-            # Não permitir outras "ações" além de skip
-            text = text.replace("Ação:", "").strip()
-
-        return text
-    except Exception:
-        return ""
+        data = json.loads(text)
+        return GeminiResponse.model_validate(data)
+    except (json.JSONDecodeError, ValidationError, Exception):
+        return None

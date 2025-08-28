@@ -4,38 +4,11 @@ from __future__ import annotations
 from typing import List, Tuple
 import re
 
-from .gemini_client import generate_reply
+from .gemini_client import generate_reply, validate_reply_text
 from .config import settings
 from .firebase_client import get_product_by_sku
 
 RESP_FALLBACK_CURTO = "Desculpe, não entendi muito bem sua mensagem. Você poderia explicar um pouco melhor para que eu consiga te ajudar?"
-
-
-def _sanitize_reply(text: str) -> str:
-    if not text:
-        return ""
-    t = text.strip()
-
-    # Se vier "Ação: skip (pular)" ou variações, devolve vazio
-    low = t.lower()
-    if (
-        low == "skip"
-        or "ação: skip" in low
-        or "acao: skip" in low
-        or "skip (pular)" in low
-    ):
-        return ""
-
-    # Remove rótulos tipo "ID:" e extrai só o conteúdo após "Resposta:"
-    t = re.sub(r"(?is)\bID:\s*.*?$", "", t).strip()
-    m = re.search(r'(?is)\bResposta:\s*"(.*?)"\s*$', t)
-    if m:
-        return m.group(1).strip()
-    m2 = re.search(r"(?is)\bResposta:\s*(.+)$", t)
-    if m2:
-        return m2.group(1).strip()
-
-    return t
 
 
 ARCO = re.compile(
@@ -82,8 +55,18 @@ def decide_reply(
     # exemplo de uso do classificador regex (opcional)
     _ = intent_from_text(" ".join(msgs))
 
-    reply = generate_reply(history, order_info=order_info)
-    clean = _sanitize_reply(reply)
-    if clean:
-        return True, clean
-    return False, ""
+    resp = generate_reply(history, order_info=order_info)
+    if not resp:
+        return False, ""
+    if resp.action != "reply":
+        return False, ""
+    if resp.confidence < settings.reply_confidence_threshold:
+        return False, ""
+    if not (
+        resp.policy_flags.nao_altera_endereco
+        and resp.policy_flags.nao_cobra_fora_app
+    ):
+        return False, ""
+    if not validate_reply_text(resp.reply):
+        return False, ""
+    return True, resp.reply
