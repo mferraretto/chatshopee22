@@ -844,12 +844,13 @@ async def _run_cycle(run_once: bool):
                 }
             }
         )
-        should, reply = decide_reply(pairs, buyer_only, order_info)
+        should, reply, info = decide_reply(pairs, buyer_only, order_info)
         ws_broadcast(
             {
                 "snapshot": {
                     "reading": [list(p) for p in pairs],
                     "proposed": reply,
+                    "estado": info.get("estado") if info else None,
                     "running": True,
                 }
             }

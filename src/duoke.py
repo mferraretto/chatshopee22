@@ -1124,7 +1124,17 @@ class DuokeBot:
                     result = decide_reply_fn(buyer_only)
                 if inspect.isawaitable(result):
                     result = await result
-                should, reply = result
+                if isinstance(result, tuple):
+                    if len(result) == 3:
+                        should, reply, _meta = result
+                        if _meta:
+                            print(f"[DEBUG] analise: {_meta}")
+                    else:
+                        should, reply = result
+                        _meta = None
+                else:
+                    should, reply = bool(result), ""
+                    _meta = None
             except Exception as e:
                 print(f"[DEBUG] erro no hook/classificador: {e}")
                 should, reply = True, RESP_FALLBACK_CURTO
