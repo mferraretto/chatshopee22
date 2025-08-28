@@ -4,7 +4,7 @@ from .config import settings
 from .firebase_client import get_product_by_sku
 import json
 import re
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 def get_gemini():
@@ -145,20 +145,15 @@ def _order_stage_context(order_info: dict | None) -> str:
     )
 
 
-def generate_reply(
+
+def plan_reply(
     history: str,
     order_info: dict | None = None,
     analysis: Dict[str, str] | None = None,
-) -> str:
-    """Gera resposta direta com base nas últimas mensagens + contexto.
-
-    ``analysis`` pode conter metadados retornados por ``classify_conversation``
-    (intent, estado, sentimento, urgencia) para orientar o tom da resposta.
-    Também garante que, se houver um SKU disponível, os dados do produto
-    correspondente sejam recuperados do sistema de produtos e enviados como
-    contexto ao Gemini."""
+) -> Dict[str, Any]:
+    """Gera um plano de resposta com objetivo e bullets."""
     if not settings.gemini_api_key:
-        return ""
+        return {"should_reply": False, "objetivo": "", "bullets": []}
     try:
         if order_info and not order_info.get("product_info"):
             sku = order_info.get("sku")
@@ -173,30 +168,28 @@ def generate_reply(
         analysis_context = ""
         if analysis:
             analysis_context = (
-                "[Analise da Conversa]\n"
-                f"intent: {analysis.get('intent', '')}\n"
-                f"estado: {analysis.get('estado', '')}\n"
-                f"sentimento: {analysis.get('sentimento', '')}\n"
-                f"urgencia: {analysis.get('urgencia', '')}\n\n"
+                "[Analise da Conversa]\\n"
+                f"intent: {analysis.get('intent', '')}\\n"
+                f"estado: {analysis.get('estado', '')}\\n"
+                f"sentimento: {analysis.get('sentimento', '')}\\n"
+                f"urgencia: {analysis.get('urgencia', '')}\\n\\n"
             )
         prod = order_info.get("product_info") if order_info else None
         prod_context = ""
         if prod:
             prod_context = (
-                "[Dados do Produto]\n"
-                f"nome: {prod.get('nome','')}\n"
-                f"sku: {prod.get('sku','')}\n"
-                f"descricao: {prod.get('descricao','')}\n"
-                f"medidas: {prod.get('medidas','')}\n\n"
+                "[Dados do Produto]\\n"
+                f"nome: {prod.get('nome','')}\\n"
+                f"sku: {prod.get('sku','')}\\n"
+                f"descricao: {prod.get('descricao','')}\\n"
+                f"medidas: {prod.get('medidas','')}\\n\\n"
             )
 
-        prompt = f"""{settings.base_prompt}
-
-INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
-- Use o contexto do pedido abaixo para entender se é pré-venda, pós-venda, enviado ou entregue.
-- Se estado_pedido for "enviado" ou "entregue", **não** use o template de tempo_envio. Se perguntarem prazo, peça UM esclarecimento objetivo (ex.: “é para este pedido ou um novo?”) sem citar status/rastreio.
-- Se a política for "pular" (ex.: pix/comprovante), devolva APENAS: "Ação: skip (pular)".
-- Caso contrário, devolva APENAS a mensagem final em 1–2 frases (sem "ID:", sem "Resposta:", sem análises).
+        prompt = f"""Decida se o vendedor deve responder.
+Retorne um JSON com as chaves:
+- should_reply: true/false
+- objetivo: objetivo da resposta em uma frase
+- bullets: lista de tópicos que a resposta deve cobrir
 
 {analysis_context}{prod_context}[Contexto do Pedido]
 {contexto}
@@ -206,19 +199,41 @@ INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
 """.strip()
 
         resp = model.generate_content(prompt)
-        text = (getattr(resp, "text", "") or "").strip()
+        txt = (getattr(resp, "text", "") or "").strip()
+        m = re.search(r"\\{.*\\}", txt, re.S)
+        if m:
+            data = json.loads(m.group(0))
+        else:
+            data = json.loads(txt)
+        if not isinstance(data.get("bullets"), list):
+            data["bullets"] = []
+        return {
+            "should_reply": bool(data.get("should_reply")),
+            "objetivo": data.get("objetivo", ""),
+            "bullets": data.get("bullets", []),
+        }
+    except Exception:
+        return {"should_reply": False, "objetivo": "", "bullets": []}
 
-        # Higienização: remover aspas externas e evitar "Ação:" indevida
-        if (text.startswith('"') and text.endswith('"')) or (
-            text.startswith("'") and text.endswith("'")
-        ):
-            text = text[1:-1].strip()
 
-        low = text.lower()
-        if low.startswith("ação:") and "skip" not in low:
-            # Não permitir outras "ações" além de skip
-            text = text.replace("Ação:", "").strip()
+def generate_reply(
+    plan: Dict[str, Any]
+) -> str:
+    """Transforma um plano em resposta curta e natural."""
+    if not settings.gemini_api_key:
+        return ""
+    try:
+        model = get_gemini()
+        objetivo = plan.get("objetivo", "")
+        bullets: List[str] = plan.get("bullets", []) or []
+        bullets_text = "\\n".join(f"- {b}" for b in bullets)
+        prompt = f"""Objetivo: {objetivo}
+Topicos:
+{bullets_text}
 
-        return text
+Escreva uma resposta breve (1-2 frases), natural e variada cobrindo os tópicos acima.""".strip()
+        resp = model.generate_content(prompt)
+        return (getattr(resp, "text", "") or "").strip()
     except Exception:
         return ""
+

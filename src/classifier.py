@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import List, Tuple
 import re
 
-from .gemini_client import generate_reply, classify_conversation
+from .gemini_client import plan_reply, generate_reply, classify_conversation
 from .config import settings
 from .firebase_client import get_product_by_sku
 from .state_machine import ConversationStateMachine
@@ -102,7 +102,10 @@ def decide_reply(
     # exemplo de uso do classificador regex (opcional)
     _ = intent_from_text(" ".join(msgs))
 
-    reply = generate_reply(history, order_info=order_info, analysis=analysis)
+    plan = plan_reply(history, order_info=order_info, analysis=analysis)
+    if not plan.get("should_reply"):
+        return False, "", analysis
+    reply = generate_reply(plan)
     clean = _sanitize_reply(reply)
     if clean:
         return True, clean, analysis
