@@ -20,7 +20,7 @@ from .cases import (
     append_label as log_label,
     infer_problema,
 )
-from .history import get_history, append_history
+from .history import get_history_with_summary, append_history, update_context
 from .product_cards import detect_product_cards
 
 # Carrega seletores configuráveis
@@ -976,18 +976,20 @@ class DuokeBot:
                 return ""
 
     @staticmethod
-    def build_history_from_pairs(pairs, max_depth: int = 20):
+    def build_history_from_pairs(pairs, summary: str = "", max_depth: int = 20):
         """Monta histórico rotulado com mensagens de comprador e vendedor.
 
-        pairs: lista [(role, text)] em ordem cronológica.
+        ``pairs``: lista ``[(role, text)]`` em ordem cronológica.
+        ``summary``: TL;DR factual do histórico (se disponível).
         Retorna bloco de texto com as últimas ``max_depth`` mensagens, cada
-        uma precedida por ``Comprador:`` ou ``Vendedor:`` para indicar a
-        origem. Essas informações são enviadas ao Gemini como contexto da
-        conversa.
+        uma precedida por ``Comprador:`` ou ``Vendedor`` para indicar a origem.
+        Essas informações são enviadas ao Gemini como contexto da conversa.
         """
 
         recents = pairs[-max_depth:]
         lines: list[str] = []
+        if summary:
+            lines.append(f"Conversation Summary: {summary.strip()}")
         for role, text in recents:
             prefix = "Comprador" if role == "buyer" else "Vendedor"
             lines.append(f"{prefix}: {text.strip()}")
@@ -1049,8 +1051,9 @@ class DuokeBot:
                 continue
 
             buyer_name = (order_info.get("buyer_name") or "").strip()
+            summary = ""
             if buyer_name:
-                stored = get_history(buyer_name)
+                stored, summary = get_history_with_summary(buyer_name)
                 if stored:
                     for p in pairs:
                         if p not in stored:
@@ -1086,7 +1089,7 @@ class DuokeBot:
                     continue
 
             # Últimas mensagens de comprador e vendedor para contexto
-            history_block = self.build_history_from_pairs(pairs, max_depth=depth * 2)
+            history_block = self.build_history_from_pairs(pairs, summary, max_depth=depth * 2)
             order_info["history_block"] = history_block
 
             # ----- dedupe por conversa e rate-limit -----
@@ -1157,6 +1160,17 @@ class DuokeBot:
             self.last_replied_at[conv_key] = now
             if buyer_name:
                 append_history(buyer_name, pairs + [("seller", reply)], max_depth=depth * 2)
+                context_data = {
+                    "pedido": order_info.get("orderId")
+                    or order_info.get("pedido", ""),
+                    "sku": order_info.get("sku", ""),
+                    "produto": order_info.get("title")
+                    or order_info.get("produto", ""),
+                    "status_logistico": order_info.get("logistics_status")
+                    or order_info.get("status", ""),
+                    "etapa": order_info.get("etapa", ""),
+                }
+                update_context(buyer_name, context_data)
 
             await page.wait_for_timeout(
                 int(getattr(settings, "delay_between_actions", 1.0) * 1000)

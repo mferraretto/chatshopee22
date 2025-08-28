@@ -4,7 +4,7 @@ from .config import settings
 from .firebase_client import get_product_by_sku
 import json
 import re
-from typing import Any, Dict, Literal
+from typing import Any, Dict, Literal, List, Tuple
 from pydantic import BaseModel, Field, ValidationError
 
 
@@ -100,28 +100,17 @@ def send_product_payload(produto: Dict[str, Any], contexto: str, objetivo: str) 
         return ""
 
 
-def _order_stage_context(order_info: dict | None) -> str:
-    """Gera um pequeno resumo do estágio do pedido para orientar o modelo (NÃO exibir ao cliente)."""
-    # Default (sem info)
-    if not order_info:
-        return (
-            "estado_pedido: desconhecido\n"
-            "order_id:\n"
-            "status:\n"
-            "payment_time:\n"
-            "logistics_status:\n"
-            "latest_logistics_description:\n"
-            "completed_time:\n"
-        )
+def detect_order_stage(order_info: dict | None) -> str:
+    """Infer the order stage (pré-venda/pos-venda/enviado/entregue)."""
 
+    if not order_info:
+        return "desconhecido"
     st_raw = (
         order_info.get("status") or order_info.get("status_consolidado") or ""
     ).strip()
     st = st_raw.lower()
-
     fields = order_info.get("fields") or {}
     order_id = order_info.get("orderId") or ""
-
     payment_time = fields.get("Payment Time", "") or fields.get("Hora do pagamento", "")
     completed_time = fields.get("Completed Time", "") or fields.get(
         "Hora de conclusão", ""
@@ -133,7 +122,6 @@ def _order_stage_context(order_info: dict | None) -> str:
         "Latest Logistics Description", ""
     )
 
-    # Heurística de estágio
     shipped_tokens = (
         "shipped",
         "enviado",
@@ -159,6 +147,36 @@ def _order_stage_context(order_info: dict | None) -> str:
         fase = "pos_venda"
     else:
         fase = "pre_venda"
+    return fase
+
+
+def _order_stage_context(order_info: dict | None) -> str:
+    """Gera um pequeno resumo do estágio do pedido para orientar o modelo (NÃO exibir ao cliente)."""
+
+    fase = detect_order_stage(order_info)
+    if not order_info:
+        order_id = ""
+        st_raw = ""
+        payment_time = ""
+        logistics_status = ""
+        latest_desc = ""
+        completed_time = ""
+    else:
+        st_raw = (
+            order_info.get("status") or order_info.get("status_consolidado") or ""
+        ).strip()
+        fields = order_info.get("fields") or {}
+        order_id = order_info.get("orderId") or ""
+        payment_time = fields.get("Payment Time", "") or fields.get("Hora do pagamento", "")
+        completed_time = fields.get("Completed Time", "") or fields.get(
+            "Hora de conclusão", ""
+        )
+        logistics_status = fields.get("Logistics Status", "") or fields.get(
+            "Status logístico", ""
+        )
+        latest_desc = order_info.get("logistics_latest_desc", "") or fields.get(
+            "Latest Logistics Description", ""
+        )
 
     return (
         f"estado_pedido: {fase}\n"
@@ -227,3 +245,21 @@ Responda APENAS com um JSON seguindo este schema:
         return GeminiResponse.model_validate(data)
     except (json.JSONDecodeError, ValidationError, Exception):
         return None
+
+
+def summarize_history(pairs: List[Tuple[str, str]]) -> str:
+    """Generate a factual TL;DR summary of the conversation history."""
+
+    if not settings.gemini_api_key or not pairs:
+        return ""
+    model = get_gemini()
+    text = "\n".join(f"{r}: {t}" for r, t in pairs)
+    prompt = (
+        "Resuma de forma factual e sem opinião a conversa a seguir em até 60 palavras:\n\n"
+        + text
+    )
+    try:
+        resp = model.generate_content(prompt)
+        return (getattr(resp, "text", "") or "").strip()
+    except Exception:
+        return ""
