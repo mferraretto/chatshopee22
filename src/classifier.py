@@ -5,6 +5,7 @@ from typing import List, Tuple
 import re
 
 from .gemini_client import generate_reply, validate_reply_text
+from .policies import detect_policies, load_snippets
 from .config import settings
 from .firebase_client import get_product_by_sku
 
@@ -55,7 +56,10 @@ def decide_reply(
     # exemplo de uso do classificador regex (opcional)
     _ = intent_from_text(" ".join(msgs))
 
-    resp = generate_reply(history, order_info=order_info)
+    policy_ids = detect_policies(" ".join(msgs))
+    policy_block = load_snippets(policy_ids)
+
+    resp = generate_reply(history, order_info=order_info, policy_context=policy_block)
     if not resp:
         return False, ""
     if resp.action != "reply":

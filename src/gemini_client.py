@@ -171,8 +171,15 @@ def _order_stage_context(order_info: dict | None) -> str:
     )
 
 
-def generate_reply(history: str, order_info: dict | None = None) -> GeminiResponse | None:
-    """Gera resposta estruturada com base nas últimas mensagens e contexto do pedido."""
+def generate_reply(
+    history: str,
+    order_info: dict | None = None,
+    policy_context: str = "",
+) -> GeminiResponse | None:
+    """Gera resposta estruturada com base nas últimas mensagens e contexto do pedido.
+
+    `policy_context` pode incluir trechos oficiais que devem ser considerados pelo modelo.
+    """
     if not settings.gemini_api_key:
         return None
     try:
@@ -198,8 +205,7 @@ def generate_reply(history: str, order_info: dict | None = None) -> GeminiRespon
             )
 
         prompt = f"""{settings.base_prompt}
-
-INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
+{policy_context}INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
 - Use o contexto do pedido abaixo para entender se é pré-venda, pós-venda, enviado ou entregue.
 - Se estado_pedido for "enviado" ou "entregue", **não** use o template de tempo_envio. Se perguntarem prazo, peça UM esclarecimento objetivo (ex.: “é para este pedido ou um novo?”) sem citar status/rastreio.
 - Se a política for "pular" (ex.: pix/comprovante), devolva APENAS: "Ação: skip (pular)".
