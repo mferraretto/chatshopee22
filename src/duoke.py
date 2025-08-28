@@ -1050,6 +1050,13 @@ class DuokeBot:
             if not pairs:
                 continue
 
+            last_role = pairs[-1][0]
+            if last_role == "seller":
+                print(
+                    "[DEBUG] conversa termina com mensagem do vendedor; encerrando ciclo"
+                )
+                break
+
             buyer_name = (order_info.get("buyer_name") or "").strip()
             summary = ""
             if buyer_name:
