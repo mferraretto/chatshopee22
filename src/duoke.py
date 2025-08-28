@@ -556,27 +556,13 @@ class DuokeBot:
     async def show_all_conversations(self, page):
         """Garante que todas as conversas estejam visíveis, removendo filtros como 'Precisa responder'."""
         try:
-            sel_all = SEL.get("filter_all_conversations", "")
-            if sel_all:
-                locator = page.locator(sel_all)
-                if await locator.count() > 0:
-                    await locator.first.click()
-                    await page.wait_for_timeout(1000)
-                    return
-        except Exception:
-            pass
-        # fallback: se não houver opção explícita de "Todos", tenta desativar
-        # diretamente o filtro "Precisa responder" caso ele esteja ativo
-        try:
-            sel_needs = SEL.get("filter_needs_reply", "")
-            if not sel_needs:
+            sel = SEL.get("filter_all_conversations", "")
+            if not sel:
                 return
-            locator = page.locator(sel_needs)
+            locator = page.locator(sel)
             if await locator.count() > 0:
-                cls = (await locator.first.get_attribute("class") or "").lower()
-                if any(flag in cls for flag in ("active", "checked", "is-active")):
-                    await locator.first.click()
-                    await page.wait_for_timeout(1000)
+                await locator.first.click()
+                await page.wait_for_timeout(1000)
         except Exception:
             # Não deve interromper o fluxo se o seletor não existir ou falhar
             pass
@@ -1138,17 +1124,7 @@ class DuokeBot:
                     result = decide_reply_fn(buyer_only)
                 if inspect.isawaitable(result):
                     result = await result
-                if isinstance(result, tuple):
-                    if len(result) == 3:
-                        should, reply, _meta = result
-                        if _meta:
-                            print(f"[DEBUG] analise: {_meta}")
-                    else:
-                        should, reply = result
-                        _meta = None
-                else:
-                    should, reply = bool(result), ""
-                    _meta = None
+                should, reply = result
             except Exception as e:
                 print(f"[DEBUG] erro no hook/classificador: {e}")
                 should, reply = True, RESP_FALLBACK_CURTO
