@@ -70,18 +70,19 @@ def decide_reply(
 
     resp = generate_reply(history, order_info=order_info, policy_context=policy_block)
     if not resp:
+        return True, RESP_FALLBACK_CURTO
+    if resp.action == "skip":
         return False, ""
     if resp.action != "reply":
-        return False, ""
+        return True, RESP_FALLBACK_CURTO
     if resp.confidence < settings.reply_confidence_threshold:
-        return False, ""
+        return True, RESP_FALLBACK_CURTO
     if not (
-        resp.policy_flags.nao_altera_endereco
-        and resp.policy_flags.nao_cobra_fora_app
+        resp.policy_flags.nao_altera_endereco and resp.policy_flags.nao_cobra_fora_app
     ):
-        return False, ""
+        return True, RESP_FALLBACK_CURTO
     if not validate_reply_text(resp.reply):
-        return False, ""
+        return True, RESP_FALLBACK_CURTO
 
     # Atualiza slots inferidos pelo modelo
     if order_info is not None:
