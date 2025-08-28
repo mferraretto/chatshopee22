@@ -10,8 +10,11 @@ message.
 from __future__ import annotations
 
 import json
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from urllib.request import Request, urlopen
+from pathlib import Path
+
+from openpyxl import Workbook
 
 from .firebase_client import FIREBASE_CONFIG
 
@@ -102,4 +105,46 @@ def append_history(
             resp.read()
     except Exception:
         pass
+
+
+def export_history_to_excel() -> Optional[Path]:
+    """Export all conversation history documents to an Excel file."""
+
+    url = (
+        f"{BASE_URL}/projects/{FIREBASE_CONFIG['projectId']}/databases/(default)/documents/"
+        f"history?key={FIREBASE_CONFIG['apiKey']}"
+    )
+    try:
+        with urlopen(url) as resp:
+            data = json.load(resp)
+    except Exception:
+        return None
+
+    docs = data.get("documents", [])
+    if not docs:
+        return None
+
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["buyer_name", "role", "text"])
+
+    for doc in docs:
+        doc_name = doc.get("name", "")
+        buyer = doc_name.split("/")[-1].replace("_", "/")
+        messages = (
+            doc.get("fields", {})
+            .get("messages", {})
+            .get("arrayValue", {})
+            .get("values", [])
+        )
+        for msg in messages:
+            fields = msg.get("mapValue", {}).get("fields", {})
+            role = fields.get("role", {}).get("stringValue", "")
+            text = fields.get("text", {}).get("stringValue", "")
+            ws.append([buyer, role, text])
+
+    path = Path("data/history.xlsx")
+    path.parent.mkdir(exist_ok=True)
+    wb.save(path)
+    return path
 
