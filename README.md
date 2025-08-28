@@ -59,7 +59,7 @@ O bot vai:
 2) (Opcional) Aplicar o filtro “Precisa responder”
 3) Iterar pelas conversas listadas
 4) Ler as **últimas N mensagens** (configurável)
-5) Perguntar ao **Gemini** qual a intenção e **se deve responder** (lembrando das suas regras)
+5) Classificar a conversa com o **Gemini** (intenção, estado, sentimento e urgência) e decidir se responde
 6) Montar resposta a partir dos **templates** e **enviar**
 7) Registrar logs no console
 
@@ -79,6 +79,7 @@ Por padrão, roda uma varredura a cada 120 segundos (config em `.env`).
 - Elogios/recebido → agradecer e se colocar à disposição.
 - Dúvidas comuns (envio/rastreio) → templates FAQ.
 - Permite **inserir código de rastreio** caso esteja visível (depende dos seletores e do layout atual).
+- Detecta o **estado da conversa** (pré-venda, pós-venda, pagamento, etc.) para ajustar tom e próxima ação.
 
 ## Exportar histórico de conversas
 

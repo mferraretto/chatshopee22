@@ -21,8 +21,8 @@ async def main():
         print("[DEBUG] Mensagens recebidas para classificação:")
         for role, msg in pairs:
             print(f"- {role}: {msg}")
-        should, reply = decide_reply(pairs, buyer_only, order_info)
-        print(f"[DEBUG] Deve responder? {should} | Resposta: {reply}")
+        should, reply, info = decide_reply(pairs, buyer_only, order_info)
+        print(f"[DEBUG] Deve responder? {should} | Estado: {info.get('estado')} | Resposta: {reply}")
         return should, reply
 
     await bot.run_once(debug_reply)

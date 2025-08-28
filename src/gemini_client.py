@@ -3,6 +3,7 @@ import google.generativeai as genai
 from .config import settings
 from .firebase_client import get_product_by_sku
 import json
+import re
 from typing import Any, Dict
 
 
@@ -42,6 +43,35 @@ def send_product_payload(produto: Dict[str, Any], contexto: str, objetivo: str) 
         return (getattr(resp, "text", "") or "").strip()
     except Exception:
         return ""
+
+
+def classify_conversation(history: str) -> Dict[str, str]:
+    """Classifica uma conversa retornando {intent, estado, sentimento, urgencia}.
+
+    Usa o Gemini para produzir um JSON estruturado. Em caso de falha ou chave
+    ausente, devolve dicionário vazio.
+    """
+
+    if not settings.gemini_api_key:
+        return {}
+    model = get_gemini()
+    prompt = (
+        "Classifique a conversa abaixo retornando um JSON com as chaves"
+        " intent, estado, sentimento e urgencia.\n"
+        "Estados possíveis: pre_venda, pos_venda_sem_problema, pos_venda_problema,"
+        " pagamento/checkout, silencio_do_cliente, encerrado.\n\n"
+        f"Conversa:\n{history}"
+    )
+    try:
+        resp = model.generate_content(prompt)
+        txt = (getattr(resp, "text", "") or "").strip()
+        # Tenta extrair o primeiro bloco JSON da resposta
+        m = re.search(r"\{.*\}", txt, re.S)
+        if m:
+            return json.loads(m.group(0))
+        return json.loads(txt)
+    except Exception:
+        return {}
 
 
 def _order_stage_context(order_info: dict | None) -> str:
@@ -115,9 +145,15 @@ def _order_stage_context(order_info: dict | None) -> str:
     )
 
 
-def generate_reply(history: str, order_info: dict | None = None) -> str:
-    """Gera resposta direta com base nas últimas mensagens + contexto do pedido.
+def generate_reply(
+    history: str,
+    order_info: dict | None = None,
+    analysis: Dict[str, str] | None = None,
+) -> str:
+    """Gera resposta direta com base nas últimas mensagens + contexto.
 
+    ``analysis`` pode conter metadados retornados por ``classify_conversation``
+    (intent, estado, sentimento, urgencia) para orientar o tom da resposta.
     Também garante que, se houver um SKU disponível, os dados do produto
     correspondente sejam recuperados do sistema de produtos e enviados como
     contexto ao Gemini."""
@@ -134,6 +170,15 @@ def generate_reply(history: str, order_info: dict | None = None) -> str:
 
         model = get_gemini()
         contexto = _order_stage_context(order_info)
+        analysis_context = ""
+        if analysis:
+            analysis_context = (
+                "[Analise da Conversa]\n"
+                f"intent: {analysis.get('intent', '')}\n"
+                f"estado: {analysis.get('estado', '')}\n"
+                f"sentimento: {analysis.get('sentimento', '')}\n"
+                f"urgencia: {analysis.get('urgencia', '')}\n\n"
+            )
         prod = order_info.get("product_info") if order_info else None
         prod_context = ""
         if prod:
@@ -153,7 +198,7 @@ INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
 - Se a política for "pular" (ex.: pix/comprovante), devolva APENAS: "Ação: skip (pular)".
 - Caso contrário, devolva APENAS a mensagem final em 1–2 frases (sem "ID:", sem "Resposta:", sem análises).
 
-{prod_context}[Contexto do Pedido]
+{analysis_context}{prod_context}[Contexto do Pedido]
 {contexto}
 
 [Conversa]
