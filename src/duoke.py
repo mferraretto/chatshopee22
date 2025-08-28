@@ -556,13 +556,27 @@ class DuokeBot:
     async def show_all_conversations(self, page):
         """Garante que todas as conversas estejam visíveis, removendo filtros como 'Precisa responder'."""
         try:
-            sel = SEL.get("filter_all_conversations", "")
-            if not sel:
+            sel_all = SEL.get("filter_all_conversations", "")
+            if sel_all:
+                locator = page.locator(sel_all)
+                if await locator.count() > 0:
+                    await locator.first.click()
+                    await page.wait_for_timeout(1000)
+                    return
+        except Exception:
+            pass
+        # fallback: se não houver opção explícita de "Todos", tenta desativar
+        # diretamente o filtro "Precisa responder" caso ele esteja ativo
+        try:
+            sel_needs = SEL.get("filter_needs_reply", "")
+            if not sel_needs:
                 return
-            locator = page.locator(sel)
+            locator = page.locator(sel_needs)
             if await locator.count() > 0:
-                await locator.first.click()
-                await page.wait_for_timeout(1000)
+                cls = (await locator.first.get_attribute("class") or "").lower()
+                if any(flag in cls for flag in ("active", "checked", "is-active")):
+                    await locator.first.click()
+                    await page.wait_for_timeout(1000)
         except Exception:
             # Não deve interromper o fluxo se o seletor não existir ou falhar
             pass
