@@ -625,13 +625,21 @@ class DuokeBot:
 
             texts = await items.evaluate_all(
                 """
-                (els) => els.map(li => {
-                    const cls = (li.className || '').toLowerCase();
-                    const role = cls.includes('lt') ? 'buyer' : (cls.includes('rt') ? 'seller' : 'system');
-                    const txtNode = li.querySelector('div.text_cont, .bubble .text, .record_item .content');
-                    const txt = (txtNode?.innerText || '').trim();
-                    return txt && role !== 'system' ? [role, txt] : null;
-                }).filter(Boolean)
+                (els) => els
+                    .map(li => {
+                        const cls = (li.className || '').toLowerCase();
+                        const role = cls.includes('lt')
+                            ? 'buyer'
+                            : (cls.includes('rt') ? 'seller' : 'system');
+                        const txtNode = li.querySelector('div.text_cont, .bubble .text, .record_item .content');
+                        const txt = (txtNode?.innerText || '').trim();
+                        const hasImg = !!li.querySelector('img');
+                        if (role === 'system') return null;
+                        if (txt) return [role, txt];
+                        if (hasImg) return [role, '[imagem]'];
+                        return null;
+                    })
+                    .filter(Boolean)
             """
             )
             out = texts[-depth:]
@@ -654,11 +662,21 @@ class DuokeBot:
             except Exception:
                 break
 
-        buyer_sel = SEL.get("buyer_message", "ul.message_main li.lt .text_cont")
         try:
-            nodes = page.locator(buyer_sel)
+            nodes = page.locator("ul.message_main li.lt")
             msgs = await nodes.evaluate_all(
-                "(els) => els.map(el => (el.innerText || '').trim()).filter(Boolean)"
+                """
+                (els) => els
+                    .map(li => {
+                        const txtNode = li.querySelector('div.text_cont, .bubble .text, .record_item .content');
+                        const txt = (txtNode?.innerText || '').trim();
+                        const hasImg = !!li.querySelector('img');
+                        if (txt) return txt;
+                        if (hasImg) return '[imagem]';
+                        return null;
+                    })
+                    .filter(Boolean)
+            """
             )
             print(f"[DEBUG] Mensagens do cliente encontradas: {len(msgs)}")
             return msgs[-depth:]
