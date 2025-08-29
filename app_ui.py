@@ -32,6 +32,7 @@ from src.config import settings
 from src.classifier import decide_reply
 from src.rules import load_rules, save_rules
 from src.cases import export_to_excel
+from src.history import fetch_all_histories
 from playwright.async_api import TimeoutError as PWTimeoutError
 
 # ===== Estado global simples =====
@@ -545,9 +546,13 @@ async def export_cases_xlsx():
 
 @app.get("/export-history")
 async def export_history():
-    p = Path("data/history.json")
-    if not p.exists():
+    data = fetch_all_histories()
+    if not data:
         return JSONResponse({"ok": False, "error": "Nenhum histórico ainda."}, status_code=404)
+    p = Path("data/history.json")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
     return FileResponse(str(p), media_type="application/json", filename="history.json")
 
 

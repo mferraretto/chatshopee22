@@ -10,7 +10,7 @@ message.
 from __future__ import annotations
 
 import json
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 from urllib.request import Request, urlopen
 
 from .firebase_client import FIREBASE_CONFIG
@@ -102,4 +102,46 @@ def append_history(
             resp.read()
     except Exception:
         pass
+
+
+def fetch_all_histories() -> Dict[str, List[Tuple[str, str]]]:
+    """Return all conversation histories stored in Firestore.
+
+    The result is a mapping of ``buyer_name`` to a list of ``(role, text)``
+    tuples.  If no documents are found or an error occurs, an empty dict is
+    returned.
+    """
+
+    base_url = (
+        f"{BASE_URL}/projects/{FIREBASE_CONFIG['projectId']}/databases/(default)/documents"
+    )
+    url = f"{base_url}/history?key={FIREBASE_CONFIG['apiKey']}"
+    out: Dict[str, List[Tuple[str, str]]] = {}
+    page_token = ""
+    try:
+        while True:
+            page_url = url + (f"&pageToken={page_token}" if page_token else "")
+            with urlopen(page_url) as resp:
+                data = json.load(resp)
+            for doc in data.get("documents", []):
+                name = doc.get("name", "").split("/")[-1]
+                values = (
+                    doc.get("fields", {})
+                    .get("messages", {})
+                    .get("arrayValue", {})
+                    .get("values", [])
+                )
+                items: List[Tuple[str, str]] = []
+                for v in values:
+                    f = v.get("mapValue", {}).get("fields", {})
+                    role = f.get("role", {}).get("stringValue", "")
+                    text = f.get("text", {}).get("stringValue", "")
+                    items.append((role, text))
+                out[name] = items
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                break
+    except Exception:
+        return {}
+    return out
 
