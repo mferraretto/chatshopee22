@@ -21,7 +21,6 @@ from .cases import (
     infer_problema,
 )
 from .history import get_history, append_history
-from .product_cards import detect_product_cards
 
 # Carrega seletores configuráveis
 SEL = json.loads(
@@ -1044,7 +1043,6 @@ class DuokeBot:
             depth = int(getattr(settings, "history_depth", 8) or 8)
             pairs = await self.read_messages_with_roles(page, depth * 2)
             print(f"[DEBUG] conversa {i}: {len(pairs)} msgs (com role)")
-            await detect_product_cards(page, pairs)
             if not pairs:
                 continue
 

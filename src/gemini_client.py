@@ -2,8 +2,6 @@
 import google.generativeai as genai
 from .config import settings
 from .firebase_client import get_product_by_sku
-import json
-from typing import Any, Dict
 
 
 def get_gemini():
@@ -17,31 +15,6 @@ def get_gemini():
             "top_p": 0.9,
         },
     )
-
-
-def send_product_payload(produto: Dict[str, Any], contexto: str, objetivo: str) -> str:
-    """Envia dados do produto e contexto ao Gemini e retorna a resposta.
-
-    O payload enviado segue o formato definido pelas regras de negócio:
-    {
-        "produto": {...},
-        "contextoConversa": "...",
-        "objetivo": "..."
-    }
-    """
-    if not settings.gemini_api_key:
-        return ""
-    model = get_gemini()
-    payload = {
-        "produto": produto,
-        "contextoConversa": contexto,
-        "objetivo": objetivo,
-    }
-    try:
-        resp = model.generate_content(json.dumps(payload, ensure_ascii=False))
-        return (getattr(resp, "text", "") or "").strip()
-    except Exception:
-        return ""
 
 
 def _order_stage_context(order_info: dict | None) -> str:
