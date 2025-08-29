@@ -3,63 +3,7 @@ import google.generativeai as genai
 from .config import settings
 from .firebase_client import get_product_by_sku
 import json
-import re
-from typing import Any, Dict, Literal, List, Tuple
-from pydantic import BaseModel, Field, ValidationError
-
-
-class Entities(BaseModel):
-    sku: str = ""
-    pedido: str = ""
-    produto: str = ""
-    medida: str = ""
-
-
-class PolicyFlags(BaseModel):
-    nao_altera_endereco: bool = True
-    nao_cobra_fora_app: bool = True
-
-
-class GeminiResponse(BaseModel):
-    action: Literal["reply", "skip", "ask_clarifying", "escalate"]
-    reply: str
-    intent: str
-    confidence: float
-    entities: Entities = Field(default_factory=Entities)
-    policy_flags: PolicyFlags = Field(default_factory=PolicyFlags)
-    reasons: list[str] = Field(default_factory=list)
-
-
-ADDRESS_RE = re.compile(
-    r"\b(rua|avenida|av\\.?|estrada|bairro|cep|logradouro|end(?:ereç|ereco))\b",
-    re.I,
-)
-OFF_APP_RE = re.compile(
-    r"\b(pix|transfer[êe]ncia|dep[óo]sito|whatsapp|zap|telefone|tel\\.?|boleto|chave)\b",
-    re.I,
-)
-
-
-def validate_reply_text(text: str) -> bool:
-    low = (text or "").lower()
-    if ADDRESS_RE.search(low):
-        return False
-    if OFF_APP_RE.search(low):
-        return False
-    return True
-
-
-JSON_CONTRACT = (
-    "{\n"
-    '  "action":"reply|skip|ask_clarifying|escalate",\n'
-    '  "reply":"...",\n'
-    '  "intent":"medidas|endereco|peca_faltando|reembolso_parcial|pos_venda|...",\n'
-    '  "confidence": 0.0,\n'
-    '  "entities": {"sku":"","pedido":"","produto":"","medida":""},\n'
-    '  "policy_flags":{"nao_altera_endereco":true,"nao_cobra_fora_app":true},\n'
-    '  "reasons":["...","..."]\n'
-    "}"
-)
+from typing import Any, Dict
 
 
 def get_gemini():
@@ -100,17 +44,28 @@ def send_product_payload(produto: Dict[str, Any], contexto: str, objetivo: str) 
         return ""
 
 
-def detect_order_stage(order_info: dict | None) -> str:
-    """Infer the order stage (pré-venda/pos-venda/enviado/entregue)."""
-
+def _order_stage_context(order_info: dict | None) -> str:
+    """Gera um pequeno resumo do estágio do pedido para orientar o modelo (NÃO exibir ao cliente)."""
+    # Default (sem info)
     if not order_info:
-        return "desconhecido"
+        return (
+            "estado_pedido: desconhecido\n"
+            "order_id:\n"
+            "status:\n"
+            "payment_time:\n"
+            "logistics_status:\n"
+            "latest_logistics_description:\n"
+            "completed_time:\n"
+        )
+
     st_raw = (
         order_info.get("status") or order_info.get("status_consolidado") or ""
     ).strip()
     st = st_raw.lower()
+
     fields = order_info.get("fields") or {}
     order_id = order_info.get("orderId") or ""
+
     payment_time = fields.get("Payment Time", "") or fields.get("Hora do pagamento", "")
     completed_time = fields.get("Completed Time", "") or fields.get(
         "Hora de conclusão", ""
@@ -122,6 +77,7 @@ def detect_order_stage(order_info: dict | None) -> str:
         "Latest Logistics Description", ""
     )
 
+    # Heurística de estágio
     shipped_tokens = (
         "shipped",
         "enviado",
@@ -147,36 +103,6 @@ def detect_order_stage(order_info: dict | None) -> str:
         fase = "pos_venda"
     else:
         fase = "pre_venda"
-    return fase
-
-
-def _order_stage_context(order_info: dict | None) -> str:
-    """Gera um pequeno resumo do estágio do pedido para orientar o modelo (NÃO exibir ao cliente)."""
-
-    fase = detect_order_stage(order_info)
-    if not order_info:
-        order_id = ""
-        st_raw = ""
-        payment_time = ""
-        logistics_status = ""
-        latest_desc = ""
-        completed_time = ""
-    else:
-        st_raw = (
-            order_info.get("status") or order_info.get("status_consolidado") or ""
-        ).strip()
-        fields = order_info.get("fields") or {}
-        order_id = order_info.get("orderId") or ""
-        payment_time = fields.get("Payment Time", "") or fields.get("Hora do pagamento", "")
-        completed_time = fields.get("Completed Time", "") or fields.get(
-            "Hora de conclusão", ""
-        )
-        logistics_status = fields.get("Logistics Status", "") or fields.get(
-            "Status logístico", ""
-        )
-        latest_desc = order_info.get("logistics_latest_desc", "") or fields.get(
-            "Latest Logistics Description", ""
-        )
 
     return (
         f"estado_pedido: {fase}\n"
@@ -189,17 +115,14 @@ def _order_stage_context(order_info: dict | None) -> str:
     )
 
 
-def generate_reply(
-    history: str,
-    order_info: dict | None = None,
-    policy_context: str = "",
-) -> GeminiResponse | None:
-    """Gera resposta estruturada com base nas últimas mensagens e contexto do pedido.
+def generate_reply(history: str, order_info: dict | None = None) -> str:
+    """Gera resposta direta com base nas últimas mensagens + contexto do pedido.
 
-    `policy_context` pode incluir trechos oficiais que devem ser considerados pelo modelo.
-    """
+    Também garante que, se houver um SKU disponível, os dados do produto
+    correspondente sejam recuperados do sistema de produtos e enviados como
+    contexto ao Gemini."""
     if not settings.gemini_api_key:
-        return None
+        return ""
     try:
         if order_info and not order_info.get("product_info"):
             sku = order_info.get("sku")
@@ -223,43 +146,34 @@ def generate_reply(
             )
 
         prompt = f"""{settings.base_prompt}
-{policy_context}INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
+
+INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
 - Use o contexto do pedido abaixo para entender se é pré-venda, pós-venda, enviado ou entregue.
 - Se estado_pedido for "enviado" ou "entregue", **não** use o template de tempo_envio. Se perguntarem prazo, peça UM esclarecimento objetivo (ex.: “é para este pedido ou um novo?”) sem citar status/rastreio.
 - Se a política for "pular" (ex.: pix/comprovante), devolva APENAS: "Ação: skip (pular)".
-- Caso contrário, responda usando APENAS o JSON com o schema abaixo.
+- Caso contrário, devolva APENAS a mensagem final em 1–2 frases (sem "ID:", sem "Resposta:", sem análises).
 
 {prod_context}[Contexto do Pedido]
 {contexto}
 
 [Conversa]
 {history}
-
-Responda APENAS com um JSON seguindo este schema:
-{JSON_CONTRACT}
 """.strip()
 
         resp = model.generate_content(prompt)
         text = (getattr(resp, "text", "") or "").strip()
-        data = json.loads(text)
-        return GeminiResponse.model_validate(data)
-    except (json.JSONDecodeError, ValidationError, Exception):
-        return None
 
+        # Higienização: remover aspas externas e evitar "Ação:" indevida
+        if (text.startswith('"') and text.endswith('"')) or (
+            text.startswith("'") and text.endswith("'")
+        ):
+            text = text[1:-1].strip()
 
-def summarize_history(pairs: List[Tuple[str, str]]) -> str:
-    """Generate a factual TL;DR summary of the conversation history."""
+        low = text.lower()
+        if low.startswith("ação:") and "skip" not in low:
+            # Não permitir outras "ações" além de skip
+            text = text.replace("Ação:", "").strip()
 
-    if not settings.gemini_api_key or not pairs:
-        return ""
-    model = get_gemini()
-    text = "\n".join(f"{r}: {t}" for r, t in pairs)
-    prompt = (
-        "Resuma de forma factual e sem opinião a conversa a seguir em até 60 palavras:\n\n"
-        + text
-    )
-    try:
-        resp = model.generate_content(prompt)
-        return (getattr(resp, "text", "") or "").strip()
+        return text
     except Exception:
         return ""

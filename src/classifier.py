@@ -4,17 +4,38 @@ from __future__ import annotations
 from typing import List, Tuple
 import re
 
-from .gemini_client import (
-    generate_reply,
-    validate_reply_text,
-    detect_order_stage,
-)
-from .policies import detect_policies, load_snippets
+from .gemini_client import generate_reply
 from .config import settings
 from .firebase_client import get_product_by_sku
-from .semantic_cache import get_cached_reply, store_cached_reply
 
 RESP_FALLBACK_CURTO = "Desculpe, não entendi muito bem sua mensagem. Você poderia explicar um pouco melhor para que eu consiga te ajudar?"
+
+
+def _sanitize_reply(text: str) -> str:
+    if not text:
+        return ""
+    t = text.strip()
+
+    # Se vier "Ação: skip (pular)" ou variações, devolve vazio
+    low = t.lower()
+    if (
+        low == "skip"
+        or "ação: skip" in low
+        or "acao: skip" in low
+        or "skip (pular)" in low
+    ):
+        return ""
+
+    # Remove rótulos tipo "ID:" e extrai só o conteúdo após "Resposta:"
+    t = re.sub(r"(?is)\bID:\s*.*?$", "", t).strip()
+    m = re.search(r'(?is)\bResposta:\s*"(.*?)"\s*$', t)
+    if m:
+        return m.group(1).strip()
+    m2 = re.search(r"(?is)\bResposta:\s*(.+)$", t)
+    if m2:
+        return m2.group(1).strip()
+
+    return t
 
 
 ARCO = re.compile(
@@ -46,13 +67,6 @@ def decide_reply(
     if not msgs:
         return False, ""
 
-    last_msg = msgs[-1]
-    etapa = detect_order_stage(order_info) if order_info else "desconhecido"
-    intent_guess = intent_from_text(" ".join(msgs))
-    cached = get_cached_reply(last_msg, etapa, intent_guess)
-    if cached and validate_reply_text(cached):
-        return True, cached
-
     history = order_info.get("history_block") if order_info else None
     if not history:
         history = "\n".join(msgs)
@@ -65,38 +79,11 @@ def decide_reply(
             order_info = dict(order_info or {})
             order_info["product_info"] = prod
 
-    policy_ids = detect_policies(" ".join(msgs))
-    policy_block = load_snippets(policy_ids)
+    # exemplo de uso do classificador regex (opcional)
+    _ = intent_from_text(" ".join(msgs))
 
-    resp = generate_reply(history, order_info=order_info, policy_context=policy_block)
-    if not resp:
-        return True, RESP_FALLBACK_CURTO
-    if resp.action == "skip":
-        return False, ""
-    if resp.action != "reply":
-        return True, RESP_FALLBACK_CURTO
-    if resp.confidence < settings.reply_confidence_threshold:
-        return True, RESP_FALLBACK_CURTO
-    if not (
-        resp.policy_flags.nao_altera_endereco and resp.policy_flags.nao_cobra_fora_app
-    ):
-        return True, RESP_FALLBACK_CURTO
-    if not validate_reply_text(resp.reply):
-        return True, RESP_FALLBACK_CURTO
-
-    # Atualiza slots inferidos pelo modelo
-    if order_info is not None:
-        order_info.setdefault("etapa", etapa)
-        ent = resp.entities
-        if ent.sku and not order_info.get("sku"):
-            prod = get_product_by_sku(ent.sku)
-            if prod:
-                order_info["sku"] = ent.sku
-                order_info["product_info"] = prod
-        if ent.pedido and not order_info.get("pedido"):
-            order_info["pedido"] = ent.pedido
-        if ent.produto and not order_info.get("produto"):
-            order_info["produto"] = ent.produto
-
-    store_cached_reply(last_msg, etapa, resp.intent, resp.reply)
-    return True, resp.reply
+    reply = generate_reply(history, order_info=order_info)
+    clean = _sanitize_reply(reply)
+    if clean:
+        return True, clean
+    return False, ""

@@ -43,11 +43,6 @@ class Settings(BaseModel):
     refine_max_chars: int = Field(
         default_factory=lambda: int(os.getenv("REFINE_MAX_CHARS", "0"))
     )
-    reply_confidence_threshold: float = Field(
-        default_factory=lambda: float(
-            os.getenv("REPLY_CONFIDENCE_THRESHOLD", "0.6")
-        )
-    )
 
     # --- App / Robô ---
     douke_url: str = Field(
