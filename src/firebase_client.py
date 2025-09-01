@@ -3,7 +3,7 @@ from typing import Dict
 from urllib.request import urlopen, Request
 
 FIREBASE_CONFIG = {
-    "apiKey": "AIzaSyCFQGW574J5Y2N8xq1y-pLzNlLIptEn8_8",
+    "apiKey": "AIzaSyDyrYVCaSexcgx0TAo7rh9E7guw7vak3m4",
     "projectId": "chatshopee-5e5a8",
 }
 
