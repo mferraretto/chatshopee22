@@ -260,7 +260,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCFQGW574J5Y2N8xq1y-pLzNlLIptEn8_8",
+  apiKey: "AIzaSyDyrYVCaSexcgx0TAo7rh9E7guw7vak3m4",
   authDomain: "chatshopee-5e5a8.firebaseapp.com",
   projectId: "chatshopee-5e5a8",
   storageBucket: "chatshopee-5e5a8.firebasestorage.app",
