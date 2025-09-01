@@ -133,6 +133,7 @@ INSTRUÇÕES ADICIONAIS (NÃO MOSTRAR AO CLIENTE):
 {history}
 """.strip()
 
+        print(f"[DEBUG] Enviando para Gemini:\n{prompt}")
         resp = model.generate_content(prompt)
         text = (getattr(resp, "text", "") or "").strip()
 
