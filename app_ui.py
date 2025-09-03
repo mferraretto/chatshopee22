@@ -31,8 +31,10 @@ from src.duoke import DuokeBot
 from src.config import settings
 from src.classifier import decide_reply
 from src.rules import load_rules, save_rules
-from src.cases import export_to_excel
+from src.cases import export_to_excel, HEADER
 from src.history import fetch_all_histories
+from src.firebase_client import fetch_all_cases
+from openpyxl import Workbook
 from playwright.async_api import TimeoutError as PWTimeoutError
 
 # ===== Estado global simples =====
@@ -219,6 +221,7 @@ HTML = Template(
         <div class="row" style="margin-bottom:8px;">
           <a class="secondary" href="/export-cases-xlsx" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Exportar Excel</a>
           <a class="secondary" href="/export-history" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Exportar histórico</a>
+          <a class="secondary" href="/export-atendimentos" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Baixar atendimentos</a>
         </div>
         <table>
           <thead>
@@ -541,6 +544,28 @@ async def export_cases_xlsx():
         str(p),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename="atendimentos.xlsx",
+    )
+
+
+@app.get("/export-atendimentos")
+async def export_atendimentos():
+    rows = fetch_all_cases()
+    if not rows:
+        return JSONResponse({"ok": False, "error": "Nenhum atendimento ainda."}, status_code=404)
+
+    p = Path("data/atendimentos_firestore.xlsx")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    wb = Workbook()
+    ws = wb.active
+    ws.append(HEADER)
+    for r in rows:
+        ws.append([r.get(h, "") for h in HEADER])
+    wb.save(p)
+
+    return FileResponse(
+        str(p),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename="atendimentos_firestore.xlsx",
     )
 
 

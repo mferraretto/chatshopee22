@@ -1,5 +1,5 @@
 import json
-from typing import Dict
+from typing import Dict, List
 from urllib.request import urlopen, Request
 
 FIREBASE_CONFIG = {
@@ -51,4 +51,36 @@ def save_case_document(case: Dict[str, str]) -> None:
             resp.read()
     except Exception:
         pass
+
+
+def fetch_all_cases() -> List[Dict[str, str]]:
+    """Fetch all documents from the Firestore 'atendimentos' collection."""
+    base = "https://firestore.googleapis.com/v1"
+    url = (
+        f"{base}/projects/{FIREBASE_CONFIG['projectId']}/databases/(default)/documents/"
+        f"atendimentos?key={FIREBASE_CONFIG['apiKey']}"
+    )
+
+    results: List[Dict[str, str]] = []
+    page_token = None
+
+    while True:
+        page_url = url + (f"&pageToken={page_token}" if page_token else "")
+        try:
+            with urlopen(page_url) as resp:
+                data = json.load(resp)
+        except Exception:
+            break
+
+        for doc in data.get("documents", []):
+            fields: Dict[str, str] = {}
+            for k, v in doc.get("fields", {}).items():
+                fields[k] = next(iter(v.values()), "")
+            results.append(fields)
+
+        page_token = data.get("nextPageToken")
+        if not page_token:
+            break
+
+    return results
 
