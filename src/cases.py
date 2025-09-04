@@ -22,6 +22,7 @@ HEADER = [
     "variacao",
     "sku",
     "problema",
+    "etiqueta",
     "ultimas_7_msgs_comprador",
 ]
 
@@ -76,8 +77,19 @@ def infer_problema(buyer_msgs: List[str]) -> str:
     return ""
 
 
+def determine_label(problema: str) -> str:
+    """Converte a descrição do problema em uma etiqueta geral."""
+    p = (problema or "").lower()
+    if "reembolso" in p:
+        return "reembolso"
+    if "peça" in p or "peca" in p:
+        return "Peças faltando"
+    return "geral"
+
+
 def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
     problema = infer_problema(buyer_only)
+    etiqueta = determine_label(problema)
 
     _ensure_header()
     ultimas_msgs = " | ".join(
@@ -93,6 +105,7 @@ def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
         order_info.get("variation", ""),
         order_info.get("sku", ""),
         problema,
+        etiqueta,
         ultimas_msgs,
     ]
 

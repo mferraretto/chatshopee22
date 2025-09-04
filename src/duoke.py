@@ -19,6 +19,7 @@ from .cases import (
     append_row as log_case,
     append_label as log_label,
     infer_problema,
+    determine_label,
 )
 from .history import get_history, append_history
 
@@ -1065,6 +1066,11 @@ class DuokeBot:
                 continue
 
             buyer_name = (order_info.get("buyer_name") or "").strip()
+            buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
+            problema = infer_problema(buyer_only)
+            etiqueta = determine_label(problema)
+            order_info["etiqueta"] = etiqueta
+            order_info["problema"] = problema
             if buyer_name:
                 stored = get_history(buyer_name)
                 if stored:
@@ -1077,8 +1083,6 @@ class DuokeBot:
                     buyer_name, pairs, order_info=order_info, max_depth=depth * 2
                 )
 
-            buyer_only = [t for r, t in pairs if r == "buyer"][-depth:]
-            problema = infer_problema(buyer_only)
             wants_parts = bool(buyer_only) and buyer_wants_missing_parts(buyer_only[-1])
 
             # Se a última mensagem do vendedor foi o texto de "quebra_com_foto"
