@@ -23,19 +23,21 @@
 
   "faltando_peca_confirmacao": "Agradeço, já estou passando para minha equipe de envios. Assim que for despachado eu te envio o rastreio.",
 
-  "quebrado_sem_foto": "Oii, espero que esteja bem. Sinto muito por isso! Para que eu possa te ajudar da melhor forma, você poderia me enviar uma foto do item? Assim consigo entender melhor o que aconteceu e buscar a melhor solução para você.",
+  "quebrado_sem_foto": "Oii, espero que esteja bem. Sinto muito por isso! Para que eu possa te ajudar da melhor forma, você poderia me enviar uma foto do item? Assim consigo entender melhor o que aconteceu e buscar a melhor solução para você. #pq_nf",
 
-  "quebrado_com_foto": "Oi! Sinto muito mesmo pelo que aconteceu, isso jamais deveria ter acontecido e entendo totalmente sua frustração. Podemos resolver de 3 formas: 1️⃣ Reembolso parcial — você fica com o produto e recebe parte do valor de volta. 2️⃣ Devolução com reembolso total pelo app da Shopee. 3️⃣ Envio de nova peça — sem custo pela peça; você paga apenas o frete (ou usa cupom de frete grátis) e não precisa devolver nada. O que acha? Estou aqui pra te ajudar.",
+  "quebrado_com_foto": "Oi! Sinto muito mesmo pelo que aconteceu, isso jamais deveria ter acontecido e entendo totalmente sua frustração. Quero resolver da melhor forma possível pra você: podemos fazer 1 a devolução com reembolso ou troca pela Shopee, ou se preferir, evitar esse processo, posso 2 fazer o Reembolso parcial de 30%, onde você fica com o produto e recebe parte do valor de volta, ou opção 3 Envio de nova peça, sem cobrar nada pelas peças, você pagaria só o frete. Assim você não precisa esperar nem se incomodar com devolução dessas aí. Responda com o número da opção escolhida para continuar. #pq_opcoes",
 
   "quebra_T6": "Olá! Sentimos muito pelo ocorrido. Podemos resolver de 3 formas: 1️⃣ Reembolso parcial — você fica com o produto e recebe parte do valor de volta. 2️⃣ Devolução pelo app da Shopee — com reembolso total após o retorno. 3️⃣ Envio de nova peça — sem custo pela peça, você paga apenas o frete, e não precisa devolver nada. Me avisa qual opção prefere que resolvo tudo por aqui!",
 
-  "reembolso_parcial": "Para solicitar reembolso parcial pelo app da Shopee: 1. Acesse Minhas Compras. 2. Selecione o pedido. 3. Clique em Devolver/Reembolsar. 4. Escolha Reembolso Parcial e adicione fotos e descrição do problema. Se precisar, posso te orientar durante o processo.",
+  "reembolso_parcial": "Olá! Para solicitar o reembolso parcial, siga estes passos: 1- Acesse Minhas Compras no app da Shopee 2- Selecione o pedido 3- Clique em Devolver/Reembolsar 4- Escolha Reembolso Parcial e adicione fotos e descrição do problema. Qualquer dúvida, estamos aqui para ajudar! #pq_op2",
 
   "valor_reembolso_parcial": "Nosso padrão para reembolso parcial é 30% do valor pago. Ex.: se o pedido foi de {ORDER_TOTAL}, o parcial ficaria em {PARTIAL_30}. Caso prefira sugerir um valor diferente, me avise que avalio aqui.",
 
-  "devolucao_total": "As devoluções são feitas pelo app da Shopee: Minhas Compras > selecione o pedido > Pedido de Reembolso. Escolha o motivo, adicione fotos e envie. Após o retorno do produto, o reembolso integral é processado.",
+  "devolucao_total": "As devoluções, trocas e reembolso são feitas pela Shopee. E preciso devolver todo o kit. Para fazer isso, vá até \"A caminho\" em \"Minhas compras\" através da guia \"Eu\" > selecione o pedido > clique em \"Pedido de Reembolso\". Em seguida, selecione o motivo de devolução/reembolso > escolha a \"Razão\" > forneça evidência e descrição (se aplicável) > clique em \"Enviar\". #pq_op1",
 
-  "nova_peca_pagando_frete": "O frete costuma sair barato, e você pode usar cupom de frete grátis. Basta calcular por este anúncio de R$ 2,00 e concluir a compra: https://shopee.com.br/product/436809529/18999193238/",
+  "nova_peca_pagando_frete": "Geralmente o frete sai baratinho, e você consegue usar cupom de frete grátis Shopee, caso tenha. Você pode calcular o frete por esse anúncio de 2,00 reais e fazer a compra dele para receber uma peça nova. Esse é o link: https://shopee.com.br/product/436809529/18999193238/ #pq_op3",
+
+  "reembolso_parcial_dificuldade": "Pedimos, por gentileza, que entre em contato diretamente com o suporte da Shopee pelo aplicativo. Basta ir em Eu > Ajuda > Fale com a Shopee e explicar a situação. Se precisar de qualquer ajuda durante o processo, estamos à disposição para orientar! #pq_op2_dificuldade",
 
   "cilindro_pequeno": "Esse é o trio compacto (3 peças menores), como na descrição. Muitos clientes compram 2 conjuntos para chegar no tamanho padrão. Se quiser, faço 25% no segundo.",
 
