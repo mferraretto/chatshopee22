@@ -254,13 +254,20 @@ HTML = Template(
           <button>Salvar</button>
         </form>
       </div>
+      <div class="card" style="margin-top:16px;">
+        <h3>Produtos Salvos</h3>
+        <table id="productsTable" style="width:100%;">
+          <thead><tr><th>Nome</th><th>SKU</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </section>
 
   </main>
 
   <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, collection, getDocs, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDyrYVCaSexcgx0TAo7rh9E7guw7vak3m4",
@@ -280,6 +287,7 @@ const logEl = document.getElementById('log');
 const statusEl = document.getElementById('status');
 const duokeStatusEl = document.getElementById('duokeStatus');
 const duokeHint = document.getElementById('duokeHint');
+const productForm = document.getElementById('product-form');
 
 screen.addEventListener('click', async ev => {
   const rect = screen.getBoundingClientRect();
@@ -306,6 +314,7 @@ function switchTab(hash) {
   if (tab && pane) { tab.classList.add('active'); pane.style.display='block'; }
   if (hash === 'regras') { loadRules(); }
   if (hash === 'atendimentos') { loadAtendimentos(); }
+  if (hash === 'produtos') { loadProducts(); }
 }
 window.addEventListener('hashchange', () => switchTab(location.hash.slice(1) || 'ativo'));
 switchTab(location.hash.slice(1) || 'ativo');
@@ -355,6 +364,45 @@ async function loadAtendimentos() {
     tbody.appendChild(tr);
   });
 }
+
+async function loadProducts() {
+  const tbody = document.querySelector('#productsTable tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  try {
+    const snap = await getDocs(collection(db, 'products'));
+    snap.forEach(docSnap => {
+      const data = docSnap.data();
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${data.nome||''}</td><td>${data.sku||''}</td><td><button class="editProd" data-sku="${data.sku}">Editar</button><button class="delProd" data-sku="${data.sku}">Excluir</button></td>`;
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('.editProd').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const sku = btn.dataset.sku;
+        const snap = await getDoc(doc(db, 'products', sku));
+        if (!snap.exists()) return;
+        const data = snap.data();
+        Object.entries(data).forEach(([k,v]) => {
+          const input = productForm.querySelector(`[name="${k}"]`);
+          if (input) input.value = v || '';
+        });
+        productForm.dataset.editing = sku;
+        const skuInput = productForm.querySelector('[name="sku"]');
+        if (skuInput) skuInput.readOnly = true;
+      });
+    });
+    tbody.querySelectorAll('.delProd').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Excluir este produto?')) return;
+        await deleteDoc(doc(db, 'products', btn.dataset.sku));
+        await loadProducts();
+      });
+    });
+  } catch (err) {
+    console.error('erro ao carregar produtos', err);
+  }
+}
 loadRules();
 
   document.getElementById('newRuleBtn').addEventListener('click', () => {
@@ -362,15 +410,19 @@ loadRules();
     form.reset();
   });
 
-  const productForm = document.getElementById('product-form');
   if (productForm) {
     productForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const data = Object.fromEntries(new FormData(productForm).entries());
       try {
-        await setDoc(doc(db, 'products', data.sku), data);
+        const sku = productForm.dataset.editing || data.sku;
+        await setDoc(doc(db, 'products', sku), data);
         alert('Produto salvo!');
         productForm.reset();
+        productForm.dataset.editing = '';
+        const skuInput = productForm.querySelector('[name="sku"]');
+        if (skuInput) skuInput.readOnly = false;
+        await loadProducts();
       } catch (err) {
         alert('Erro ao salvar: ' + err);
       }
