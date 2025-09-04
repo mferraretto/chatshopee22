@@ -3,14 +3,14 @@
 This module replaces the previous local JSON storage and keeps a small
 conversation history for each buyer inside the Firebase collection
 ``history``.  Each document uses the buyer name as its document ID and
-contains an array field called ``messages`` with the role and text of each
-message.
+stores an array field ``messages`` with the role and text of each message
+and a ``order_info`` map with details of the related order.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 from urllib.request import Request, urlopen
 
 from .firebase_client import FIREBASE_CONFIG
@@ -59,9 +59,12 @@ def get_history(buyer_name: str) -> List[Tuple[str, str]]:
 
 
 def append_history(
-    buyer_name: str, pairs: List[Tuple[str, str]], max_depth: int = 20
+    buyer_name: str,
+    pairs: List[Tuple[str, str]],
+    order_info: Dict[str, Any] | None = None,
+    max_depth: int = 20,
 ) -> None:
-    """Append conversation ``pairs`` to the buyer history in Firestore."""
+    """Append conversation ``pairs`` and ``order_info`` to Firestore."""
 
     if not buyer_name:
         return
@@ -90,6 +93,11 @@ def append_history(
         for role, text in items
     ]
     data = {"fields": {"messages": {"arrayValue": {"values": values}}}}
+    if order_info:
+        order_fields = {
+            k: {"stringValue": str(v)} for k, v in order_info.items() if v is not None
+        }
+        data["fields"]["order_info"] = {"mapValue": {"fields": order_fields}}
 
     req = Request(
         url,
@@ -104,19 +112,20 @@ def append_history(
         pass
 
 
-def fetch_all_histories() -> Dict[str, List[Tuple[str, str]]]:
-    """Return all conversation histories stored in Firestore.
+def fetch_all_histories() -> Dict[str, Dict[str, Any]]:
+    """Return all conversation histories and order info stored in Firestore.
 
-    The result is a mapping of ``buyer_name`` to a list of ``(role, text)``
-    tuples.  If no documents are found or an error occurs, an empty dict is
-    returned.
+    The result is a mapping of ``buyer_name`` to a dict with keys
+    ``messages`` (list of ``(role, text)`` tuples) and ``order_info`` (dict
+    of order fields). If no documents are found or an error occurs, an empty
+    dict is returned.
     """
 
     base_url = (
         f"{BASE_URL}/projects/{FIREBASE_CONFIG['projectId']}/databases/(default)/documents"
     )
     url = f"{base_url}/history?key={FIREBASE_CONFIG['apiKey']}"
-    out: Dict[str, List[Tuple[str, str]]] = {}
+    out: Dict[str, Dict[str, Any]] = {}
     page_token = ""
     try:
         while True:
@@ -125,9 +134,9 @@ def fetch_all_histories() -> Dict[str, List[Tuple[str, str]]]:
                 data = json.load(resp)
             for doc in data.get("documents", []):
                 name = doc.get("name", "").split("/")[-1]
+                fields = doc.get("fields", {})
                 values = (
-                    doc.get("fields", {})
-                    .get("messages", {})
+                    fields.get("messages", {})
                     .get("arrayValue", {})
                     .get("values", [])
                 )
@@ -137,7 +146,15 @@ def fetch_all_histories() -> Dict[str, List[Tuple[str, str]]]:
                     role = f.get("role", {}).get("stringValue", "")
                     text = f.get("text", {}).get("stringValue", "")
                     items.append((role, text))
-                out[name] = items
+                info_fields = (
+                    fields.get("order_info", {})
+                    .get("mapValue", {})
+                    .get("fields", {})
+                )
+                order_info = {
+                    k: v.get("stringValue", "") for k, v in info_fields.items()
+                }
+                out[name] = {"messages": items, "order_info": order_info}
             page_token = data.get("nextPageToken")
             if not page_token:
                 break

@@ -82,9 +82,10 @@ Por padrão, roda uma varredura a cada 120 segundos (config em `.env`).
 
 ## Exportar histórico de conversas
 
-A interface web possui um botão **Exportar histórico** na aba *Atendimentos* que permite
-baixar o arquivo `history.json` com todas as mensagens salvas pelo bot na
-coleção `history` do Firebase.
+A interface web possui um botão **Exportar histórico** na aba *Atendimentos* que
+permite baixar o arquivo `history.json` com todas as conversas já abertas pelo
+bot. Cada registro inclui as informações do pedido e todas as mensagens de
+cliente, vendedor e bot salvas na coleção `history` do Firebase.
 
 ## Estrutura
 
