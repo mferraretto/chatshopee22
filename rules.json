@@ -57,28 +57,59 @@
     "id": "quebra_sem_foto",
     "active": true,
     "match": { "any_contains": ["quebrado", "rachado", "defeito", "trincado", "danificado"], "none_contains": ["foto"] },
-    "reply": "Sinto muito pelo ocorrido! Para agilizar, pode me enviar uma foto do item e da embalagem? Assim registro corretamente e já encaminho a solução (reposição, reembolso parcial ou devolução)."
+    "reply": "Oii, espero que esteja bem. Sinto muito por isso! Para que eu possa te ajudar da melhor forma, você poderia me enviar uma foto do item? Assim consigo entender melhor o que aconteceu e buscar a melhor solução para você. #pq_nf"
   },
 
   {
     "id": "quebra_com_foto",
     "active": true,
     "match": { "any_contains": ["quebrou", "quebrado em duas partes", "produto veio danificado", "troca urgente", "enviam outro", "enviam outra", "desesperad", "solto", "descolado", "rachado", "defeito", "trincado", "danificado", "foto"] },
-    "reply": "Obrigado pelas fotos e desculpe o transtorno. Posso resolver de 3 formas: 1) reembolso parcial (você fica com o produto), 2) devolução pelo app com reembolso total após retorno, 3) envio de nova peça. Se o erro foi nosso, o frete de reenvio é por nossa conta. Me diga qual prefere."
+    "reply": "Oi! Sinto muito mesmo pelo que aconteceu, isso jamais deveria ter acontecido e entendo totalmente sua frustração. Quero resolver da melhor forma possível pra você: podemos fazer 1 a devolução com reembolso ou troca pela Shopee, ou se preferir, evitar esse processo, posso 2 fazer o Reembolso parcial de 30%, onde você fica com o produto e recebe parte do valor de volta, ou opção 3 Envio de nova peça, sem cobrar nada pelas peças, você pagaria só o frete. Assim você não precisa esperar nem se incomodar com devolução dessas aí. Responda com o número da opção escolhida para continuar. #pq_opcoes"
+  },
+
+  {
+    "id": "quebrado_opcao1_devolucao",
+    "active": true,
+    "match": { "all_contains": ["#pq_opcoes", "1"] },
+    "reply": "As devoluções, trocas e reembolso são feitas pela Shopee. E preciso devolver todo o kit. Para fazer isso, vá até \"A caminho\" em \"Minhas compras\" através da guia \"Eu\" > selecione o pedido > clique em \"Pedido de Reembolso\". Em seguida, selecione o motivo de devolução/reembolso > escolha a \"Razão\" > forneça evidência e descrição (se aplicável) > clique em \"Enviar\". #pq_op1"
+  },
+
+  {
+    "id": "quebrado_opcao2_reembolso_parcial",
+    "active": true,
+    "match": { "all_contains": ["#pq_opcoes", "2"] },
+    "reply": "Olá! Para solicitar o reembolso parcial, siga estes passos: 1- Acesse Minhas Compras no app da Shopee 2- Selecione o pedido 3- Clique em Devolver/Reembolsar 4- Escolha Reembolso Parcial e adicione fotos e descrição do problema. Qualquer dúvida, estamos aqui para ajudar! #pq_op2"
+  },
+
+  {
+    "id": "quebrado_opcao3_nova_peca",
+    "active": true,
+    "match": { "all_contains": ["#pq_opcoes", "3"] },
+    "reply": "Geralmente o frete sai baratinho, e você consegue usar cupom de frete grátis Shopee, caso tenha. Você pode calcular o frete por esse anúncio de 2,00 reais e fazer a compra dele para receber uma peça nova. Esse é o link: https://shopee.com.br/product/436809529/18999193238/ #pq_op3"
+  },
+
+  {
+    "id": "reembolso_parcial_dificuldade",
+    "active": true,
+    "match": {
+      "all_contains": ["#pq_op2"],
+      "any_contains": ["não consigo", "nao consigo", "não tem", "nao tem", "não abre", "nao abre"]
+    },
+    "reply": "Pedimos, por gentileza, que entre em contato diretamente com o suporte da Shopee pelo aplicativo. Basta ir em Eu > Ajuda > Fale com a Shopee e explicar a situação. Se precisar de qualquer ajuda durante o processo, estamos à disposição para orientar! #pq_op2_dificuldade"
   },
 
   {
     "id": "reembolso_parcial",
     "active": true,
     "match": { "any_contains": ["reembolso parcial", "parcial"] },
-    "reply": "Para solicitar pelo app: Minhas Compras > pedido > Devolver/Reembolsar > Reembolso Parcial. Anexe fotos e descreva o ocorrido. Assim que abrir, me avise por aqui para eu acompanhar de perto, por favor."
+    "reply": "Olá! Para solicitar o reembolso parcial, siga estes passos: 1- Acesse Minhas Compras no app da Shopee 2- Selecione o pedido 3- Clique em Devolver/Reembolsar 4- Escolha Reembolso Parcial e adicione fotos e descrição do problema. Qualquer dúvida, estamos aqui para ajudar! #pq_op2"
   },
 
   {
     "id": "devolucao_total",
     "active": true,
     "match": { "any_contains": ["devolução", "reembolso total", "devolver"] },
-    "reply": "Devoluções e reembolsos são feitos pelo app da Shopee. Vá em Minhas Compras > selecione o pedido > Pedido de Reembolso, escolha o motivo e anexe as evidências. Qualquer dificuldade, me chama aqui que te auxilio no passo a passo."
+    "reply": "As devoluções, trocas e reembolso são feitas pela Shopee. E preciso devolver todo o kit. Para fazer isso, vá até \"A caminho\" em \"Minhas compras\" através da guia \"Eu\" > selecione o pedido > clique em \"Pedido de Reembolso\". Em seguida, selecione o motivo de devolução/reembolso > escolha a \"Razão\" > forneça evidência e descrição (se aplicável) > clique em \"Enviar\". #pq_op1"
   },
 
   {
