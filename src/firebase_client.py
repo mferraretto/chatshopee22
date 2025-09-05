@@ -53,6 +53,29 @@ def save_case_document(case: Dict[str, str]) -> None:
         pass
 
 
+def mark_case_resolved(order_id: str, resolved: bool = True) -> None:
+    base = "https://firestore.googleapis.com/v1"
+    url = (
+        f"{base}/projects/{FIREBASE_CONFIG['projectId']}/databases/(default)/documents/"
+        f"atendimentos/{order_id}?key={FIREBASE_CONFIG['apiKey']}"
+        "&updateMask.fieldPaths=resolvido"
+    )
+    data = {
+        "fields": {"resolvido": {"stringValue": "true" if resolved else "false"}}
+    }
+    req = Request(
+        url,
+        data=json.dumps(data).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="PATCH",
+    )
+    try:
+        with urlopen(req) as resp:
+            resp.read()
+    except Exception:
+        pass
+
+
 def fetch_all_cases() -> List[Dict[str, str]]:
     """Fetch all documents from the Firestore 'atendimentos' collection."""
     base = "https://firestore.googleapis.com/v1"

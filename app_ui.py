@@ -33,7 +33,7 @@ from src.classifier import decide_reply
 from src.rules import load_rules, save_rules
 from src.cases import export_to_excel, HEADER
 from src.history import fetch_all_histories
-from src.firebase_client import fetch_all_cases
+from src.firebase_client import fetch_all_cases, mark_case_resolved
 from openpyxl import Workbook
 from playwright.async_api import TimeoutError as PWTimeoutError
 
@@ -105,6 +105,7 @@ HTML = Template(
     <a href="#config" id="tab-config">Configurações</a>
     <a href="#regras" id="tab-regras">Regras</a>
     <a href="#atendimentos" id="tab-atendimentos">Atendimentos</a>
+    <a href="#reclamacoes" id="tab-reclamacoes">Reclamações</a>
     <a href="#produtos" id="tab-produtos">Produtos</a>
   </nav>
 
@@ -242,6 +243,30 @@ HTML = Template(
       </div>
     </section>
 
+    <!-- ABA RECLAMAÇÕES -->
+    <section id="pane-reclamacoes" style="display:none;">
+      <div class="card">
+        <h3>Reclamações</h3>
+        <div class="row" style="margin-bottom:8px;">
+          <a class="secondary" href="/export-atendimentos" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Exportar planilha</a>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Pedido</th>
+              <th>Comprador</th>
+              <th>Etiqueta</th>
+              <th>Problema</th>
+              <th>Resolvido</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="reclBody"></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- ABA PRODUTOS -->
     <section id="pane-produtos" style="display:none;">
       <div class="card" style="max-width:420px;">
@@ -314,6 +339,7 @@ function switchTab(hash) {
   if (tab && pane) { tab.classList.add('active'); pane.style.display='block'; }
   if (hash === 'regras') { loadRules(); }
   if (hash === 'atendimentos') { loadAtendimentos(); }
+  if (hash === 'reclamacoes') { loadReclamacoes(); }
   if (hash === 'produtos') { loadProducts(); }
 }
 window.addEventListener('hashchange', () => switchTab(location.hash.slice(1) || 'ativo'));
@@ -362,6 +388,30 @@ async function loadAtendimentos() {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${r.timestamp_utc||''}</td><td>${r.order_id||''}</td><td>${r.status||''}</td><td>${r.buyer_name||''}</td><td>${r.produto||''}</td><td>${r.variacao||''}</td><td>${r.sku||''}</td><td>${r.problema||''}</td><td>${r.ultimas_7_msgs_comprador||''}</td>`;
     tbody.appendChild(tr);
+  });
+}
+
+async function loadReclamacoes() {
+  const tbody = document.getElementById('reclBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  let data = [];
+  try {
+    data = await fetch('/complaints').then(r => r.json());
+  } catch (e) {
+    console.error('falha ao carregar reclamações', e);
+  }
+  data.forEach(r => {
+    const resolved = String(r.resolvido).toLowerCase() === 'true';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.timestamp_utc||''}</td><td>${r.order_id||''}</td><td>${r.buyer_name||''}</td><td>${r.etiqueta||''}</td><td>${r.problema||''}</td><td>${resolved?'Sim':'Não'}</td><td>${resolved?'':`<button class="resolveCase" data-id="${r.order_id}">Marcar resolvido</button>`}</td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('.resolveCase').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await fetch(`/resolve-case/${encodeURIComponent(btn.dataset.id)}`, { method: 'POST' });
+      await loadReclamacoes();
+    });
   });
 }
 
@@ -584,6 +634,17 @@ async def list_cases():
         return []
     with p.open("r", newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
+
+
+@app.get("/complaints")
+async def list_complaints():
+    return fetch_all_cases()
+
+
+@app.post("/resolve-case/{order_id}")
+async def resolve_case(order_id: str):
+    mark_case_resolved(order_id, True)
+    return {"ok": True}
 
 
 @app.get("/export-cases-xlsx")
