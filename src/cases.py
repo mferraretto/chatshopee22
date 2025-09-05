@@ -112,6 +112,10 @@ def append_row(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
     with CSV_PATH.open("a", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow(row)
 
+    case = {h: v for h, v in zip(HEADER, row)}
+    case["resolvido"] = "false"
+    save_case_document(case)
+
 
 def append_label(order_info: Dict[str, Any], buyer_only: List[str]) -> None:
     """Salva informações básicas de pedidos que receberiam etiqueta."""
