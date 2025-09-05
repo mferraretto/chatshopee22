@@ -401,6 +401,11 @@ async function loadReclamacoes() {
   } catch (e) {
     console.error('falha ao carregar reclamações', e);
   }
+  const allowed = ['reembolso', 'peças faltando', 'pix'];
+  data = data.filter(r => {
+    const problema = (r.problema || '').toLowerCase();
+    return allowed.some(p => problema.includes(p));
+  });
   data.forEach(r => {
     const resolved = String(r.resolvido).toLowerCase() === 'true';
     const tr = document.createElement('tr');
