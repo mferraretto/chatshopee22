@@ -51,12 +51,6 @@ def _ensure_label_header():
 TRIGGERS = {
     "reembolso parcial": ["reembolso parcial"],
     "enviar nova peça": ["nova peça", "nova peca"],
-    "enviar peça faltante": [
-        "peça faltante",
-        "peca faltante",
-        "peça faltando",
-        "peca faltando",
-    ],
 }
 
 
@@ -74,6 +68,27 @@ def infer_problema(buyer_msgs: List[str]) -> str:
         for kw in kws:
             if kw in last:
                 return label
+
+    missing_markers = [
+        "faltou",
+        "faltando",
+        "não veio",
+        "nao veio",
+        "veio sem",
+        "veio faltando",
+        "não recebi",
+        "nao recebi",
+    ]
+    item_terms = [
+        "peça",
+        "peca",
+        "produto",
+        "parte",
+        "item",
+        "parafuso",
+    ]
+    if any(m in last for m in missing_markers) and any(t in last for t in item_terms):
+        return "peça faltando"
     return ""
 
 
@@ -82,7 +97,7 @@ def determine_label(problema: str) -> str:
     p = (problema or "").lower()
     if "reembolso" in p:
         return "reembolso"
-    if "peça" in p or "peca" in p:
+    if any(t in p for t in ["peça", "peca", "produto", "parte", "item"]):
         return "Peças faltando"
     return "geral"
 
