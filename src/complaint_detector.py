@@ -153,13 +153,57 @@ class ComplaintDetector:
         return complaints
     
     def should_flag_conversation(self, messages: List[str], min_confidence: float = 0.3) -> bool:
-        """Determina se a conversa deve ser marcada para atenção manual"""
+        """Determina se a conversa deve ser marcada para atenção manual
+        
+        Retorna True apenas para problemas específicos:
+        - Falta de peças/partes 
+        - Quebras/defeitos
+        
+        Ignora conversas normais (dúvidas, elogios, perguntas sobre entrega, etc.)
+        """
+        if not messages:
+            return False
+            
         complaints = self.analyze_messages(messages)
         
+        # Verifica se há reclamações específicas com confiança suficiente
         for complaint in complaints:
             if complaint.confidence >= min_confidence:
-                return True
+                # Só marca problemas específicos que requerem ação
+                if complaint.type in ['falta_peca', 'quebra']:
+                    return True
         
+        return False
+    
+    def is_normal_conversation(self, messages: List[str]) -> bool:
+        """Verifica se é uma conversa normal (sem problemas específicos)
+        
+        Detecta padrões de conversas normais que devem ser puladas:
+        - Perguntas sobre entrega/prazo
+        - Agradecimentos 
+        - Dúvidas sobre produto
+        - Elogios
+        """
+        if not messages:
+            return True
+            
+        combined_text = ' '.join(messages[-5:]).lower()
+        
+        # Padrões de conversas normais (sem problemas)
+        normal_patterns = [
+            r'\b(quando|como|onde)\b.*\b(chega|chegará|vai chegar|entrega)\b',
+            r'\b(obrigad[oa]|agradec)\b',
+            r'\b(qual|como)\b.*\b(usar|utilizar|montar|instalar)\b',
+            r'\b(muito bom|excelente|ótimo|otimo|perfeito)\b',
+            r'\b(dúvida|duvida|pergunta)\b.*\b(sobre|do|da)\b',
+            r'\b(prazo|tempo)\b.*\b(entrega|envio)\b',
+            r'\b(rastreamento|código|tracking)\b',
+        ]
+        
+        for pattern in normal_patterns:
+            if re.search(pattern, combined_text, re.IGNORECASE):
+                return True
+                
         return False
 
 

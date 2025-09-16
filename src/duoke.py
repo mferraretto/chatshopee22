@@ -874,17 +874,18 @@ class DuokeBot:
             
             # Estratégias múltiplas para encontrar o botão Confirm
             confirm_strategies = [
-                # Estratégia 1: Seletores específicos
+                # Estratégia 1: Seletores específicos baseados no elemento real
                 {
-                    'name': 'Seletores específicos',
+                    'name': 'Seletores específicos do Duoke',
                     'selectors': [
+                        'button[data-v-c0d8ee92][class*="el-button--primary"] span:text("Confirm")',
+                        'button[data-v-c0d8ee92][class*="el-button--primary"]',
+                        'button[fdprocessedid][class*="el-button--primary"] span:text("Confirm")',
+                        'button[fdprocessedid][class*="el-button--primary"]',
+                        'button[class*="el-button--primary"] span:text("Confirm")',
+                        'button[class*="el-button--primary"]:has-text("Confirm")',
                         'button:has-text("Confirm")',
-                        'span:text("Confirm")',
-                        '[class*="el-button--primary"]:has-text("Confirm")',
-                        'button[class*="el-button--primary"]',
-                        'button[fdprocessedid]:has-text("Confirm")',
-                        '.el-dialog__footer button[class*="primary"]',
-                        '.el-message-box__btns button[class*="primary"]'
+                        'span:text("Confirm")'
                     ]
                 },
                 # Estratégia 2: Por posição (último botão visível)
@@ -932,36 +933,82 @@ class DuokeBot:
                         print(f"[DEBUG] ❌ Erro com seletor {sel}: {e}")
                         continue
             
-            # Estratégia 3: Fallback com JavaScript
-            if not confirm_clicked:
-                print("[DEBUG] 🔧 Tentando fallback JavaScript...")
-                try:
-                    # Busca por texto "Confirm" em botões via JavaScript
-                    js_result = await page.evaluate("""
-                        () => {
-                            const buttons = Array.from(document.querySelectorAll('button, span'));
-                            const confirmBtn = buttons.find(btn => {
-                                const text = (btn.textContent || '').trim().toLowerCase();
-                                return text === 'confirm' || text === 'confirmar';
-                            });
-                            if (confirmBtn && confirmBtn.offsetParent) {
-                                confirmBtn.click();
-                                return true;
+                # Estratégia 3: Fallback com JavaScript específico para o elemento Duoke
+                if not confirm_clicked:
+                    print("[DEBUG] 🔧 Tentando fallback JavaScript específico...")
+                    try:
+                        # JavaScript específico para o botão Confirm do Duoke
+                        js_result = await page.evaluate("""
+                            () => {
+                                // Busca pelo botão específico do Duoke
+                                const specificBtn = document.querySelector('button[data-v-c0d8ee92][class*="el-button--primary"]');
+                                if (specificBtn && specificBtn.offsetParent) {
+                                    specificBtn.click();
+                                    return true;
+                                }
+                                
+                                // Fallback: busca por botão com fdprocessedid
+                                const processedBtn = document.querySelector('button[fdprocessedid][class*="el-button--primary"]');
+                                if (processedBtn && processedBtn.offsetParent) {
+                                    processedBtn.click();
+                                    return true;
+                                }
+                                
+                                // Fallback: busca por span "Confirm" dentro de botão
+                                const confirmSpans = Array.from(document.querySelectorAll('span'));
+                                for (const span of confirmSpans) {
+                                    if (span.textContent.trim() === 'Confirm') {
+                                        const button = span.closest('button');
+                                        if (button && button.offsetParent) {
+                                            button.click();
+                                            return true;
+                                        }
+                                    }
+                                }
+                                
+                                // Último fallback: qualquer botão com "Confirm"
+                                const buttons = Array.from(document.querySelectorAll('button'));
+                                const confirmBtn = buttons.find(btn => {
+                                    const text = (btn.textContent || '').trim().toLowerCase();
+                                    return text === 'confirm' || text === 'confirmar';
+                                });
+                                if (confirmBtn && confirmBtn.offsetParent) {
+                                    confirmBtn.click();
+                                    return true;
+                                }
+                                
+                                return false;
                             }
-                            return false;
-                        }
-                    """)
+                        """)
+                        
+                        if js_result:
+                            confirm_clicked = True
+                            print("[DEBUG] ✅ Confirm clicado via JavaScript específico")
+                        else:
+                            print("[DEBUG] ❌ JavaScript não encontrou botão Confirm específico")
+                            
+                    except Exception as e:
+                        print(f"[DEBUG] ❌ Erro no fallback JavaScript: {e}")
+            
+            # Estratégia 4: Tentativa direta com seletor exato
+            if not confirm_clicked:
+                print("[DEBUG] 🎯 Tentando seletor exato do elemento...")
+                try:
+                    # Tenta o seletor exato baseado no elemento fornecido
+                    exact_selector = 'button[data-v-c0d8ee92][type="button"][class*="el-button--primary"][fdprocessedid]'
+                    exact_element = page.locator(exact_selector)
                     
-                    if js_result:
+                    if await exact_element.count() > 0:
+                        await exact_element.click()
                         confirm_clicked = True
-                        print("[DEBUG] ✅ Confirm clicado via JavaScript")
+                        print(f"[DEBUG] ✅ Confirm clicado com seletor exato: {exact_selector}")
                     else:
-                        print("[DEBUG] ❌ JavaScript não encontrou botão Confirm")
+                        print(f"[DEBUG] ❌ Seletor exato não encontrou elemento")
                         
                 except Exception as e:
-                    print(f"[DEBUG] ❌ Erro no fallback JavaScript: {e}")
+                    print(f"[DEBUG] ❌ Erro com seletor exato: {e}")
             
-            # Estratégia 4: Enter como último recurso
+            # Estratégia 5: Enter como último recurso
             if not confirm_clicked:
                 print("[DEBUG] ⌨️ Tentando tecla Enter como último recurso...")
                 try:
@@ -1397,53 +1444,50 @@ class DuokeBot:
                 
                 # 🚨 SE HÁ RECLAMAÇÃO DETECTADA: Processa marcação e registro
                 print(f"[DEBUG] 🚨 RECLAMAÇÃO DETECTADA - Iniciando processamento completo...")
-                if flagged or any(keyword in analysis_result.lower() for keyword in ['reclamação', 'marcado']):
+                
+                # 1. MARCA VISUALMENTE A CONVERSA COM TAG
+                try:
+                    # Detecta o tipo de reclamação para escolher a tag correta
+                    complaint_type = 'outro'  # padrão
                     
-                    # 1. MARCA VISUALMENTE A CONVERSA COM TAG
-                    try:
-                        # Detecta o tipo de reclamação para escolher a tag correta
-                        complaint_type = 'outro'  # padrão
-                        
-                        # Analisa o resultado para extrair o tipo principal
-                        analysis_lower = analysis_result.lower()
-                        if 'tipo principal:' in analysis_lower:
-                            # Extrai o tipo principal da resposta do classifier
-                            import re
-                            match = re.search(r'tipo principal:\s*(\w+)', analysis_lower)
-                            if match:
-                                detected_type = match.group(1)
-                                complaint_type = detected_type
-                        else:
-                            # Fallback para detecção baseada em palavras-chave
-                            if any(keyword in analysis_lower for keyword in ['falta de peça', 'falta de peca', 'missing']):
-                                complaint_type = 'falta_peca'
-                            elif any(keyword in analysis_lower for keyword in ['quebra', 'defeito', 'broken']):
-                                complaint_type = 'quebra'
-                        
-                        # Marca a conversa com a tag visual apropriada
-                        print(f"[DEBUG] 🎯 Iniciando marcação visual para tipo: {complaint_type}")
-                        tag_success = await self.mark_conversation_with_tag(page, complaint_type)
-                        
-                        if tag_success:
-                            print(f"[DEBUG] 🎉 ✅ Conversa marcada visualmente com tag '{complaint_type}' COM SUCESSO!")
-                            # Aguarda mais um tempo para garantir que a tag foi aplicada completamente
-                            print("[DEBUG] ⏱️ Aguardando estabilização após marcação...")
-                            await page.wait_for_timeout(1500)
-                        else:
-                            print(f"[DEBUG] ❌ ⚠️ FALHA ao marcar conversa visualmente com tag '{complaint_type}' - continuando sem marcação")
-                            
-                    except Exception as e:
-                        print(f"[DEBUG] ❌ Erro ao marcar visualmente: {e}")
+                    # Analisa o resultado para extrair o tipo principal
+                    analysis_lower = analysis_result.lower()
+                    if 'tipo principal:' in analysis_lower:
+                        # Extrai o tipo principal da resposta do classifier
+                        import re
+                        match = re.search(r'tipo principal:\s*(\w+)', analysis_lower)
+                        if match:
+                            detected_type = match.group(1)
+                            complaint_type = detected_type
+                    else:
+                        # Fallback para detecção baseada em palavras-chave
+                        if any(keyword in analysis_lower for keyword in ['falta de peça', 'falta de peca', 'missing']):
+                            complaint_type = 'falta_peca'
+                        elif any(keyword in analysis_lower for keyword in ['quebra', 'defeito', 'broken']):
+                            complaint_type = 'quebra'
                     
-                    # 2. REGISTRA NOS SISTEMAS DE DADOS
-                    try:
-                        log_case(order_info, buyer_only)
-                        log_label(order_info, buyer_only)
-                        print("[DEBUG] ✅ Conversa com reclamação registrada nos sistemas")
-                    except Exception as e:
-                        print(f"[DEBUG] falha ao registrar no sistema antigo: {e}")
-                else:
-                    print("[DEBUG] ✅ Conversa analisada - nenhuma reclamação detectada")
+                    # Marca a conversa com a tag visual apropriada
+                    print(f"[DEBUG] 🎯 Iniciando marcação visual para tipo: {complaint_type}")
+                    tag_success = await self.mark_conversation_with_tag(page, complaint_type)
+                    
+                    if tag_success:
+                        print(f"[DEBUG] 🎉 ✅ Conversa marcada visualmente com tag '{complaint_type}' COM SUCESSO!")
+                        # Aguarda mais um tempo para garantir que a tag foi aplicada completamente
+                        print("[DEBUG] ⏱️ Aguardando estabilização após marcação...")
+                        await page.wait_for_timeout(1500)
+                    else:
+                        print(f"[DEBUG] ❌ ⚠️ FALHA ao marcar conversa visualmente com tag '{complaint_type}' - continuando sem marcação")
+                        
+                except Exception as e:
+                    print(f"[DEBUG] ❌ Erro ao marcar visualmente: {e}")
+                
+                # 2. REGISTRA NOS SISTEMAS DE DADOS
+                try:
+                    log_case(order_info, buyer_only)
+                    log_label(order_info, buyer_only)
+                    print("[DEBUG] ✅ Conversa com reclamação registrada nos sistemas")
+                except Exception as e:
+                    print(f"[DEBUG] falha ao registrar no sistema antigo: {e}")
                     
             except Exception as e:
                 print(f"[DEBUG] erro no classificador de reclamações: {e}")
