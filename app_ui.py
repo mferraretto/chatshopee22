@@ -1179,17 +1179,26 @@ async def _run_cycle(run_once: bool):
         )
         flagged, analysis = decide_reply(pairs, buyer_only, order_info)
         
-        # Mostra resultado da análise em vez de resposta sugerida
-        display_message = "🔍 ANÁLISE CONCLUÍDA\n\n"
-        if flagged:
-            display_message += "🚨 RECLAMAÇÃO DETECTADA!\n"
+        # Mostra resultado da análise de forma otimizada
+        if "conversa normal" in analysis.lower() or "pulando" in analysis.lower():
+            # Conversa normal - display simplificado
+            display_message = "⚡ ANÁLISE RÁPIDA\n\n"
+            display_message += "✅ Conversa normal detectada\n"
             display_message += f"📋 {analysis}\n\n"
-            display_message += "🏷️ Conversa marcada automaticamente no Duoke\n"
-            display_message += "💾 Dados salvos para revisão manual"
+            display_message += "⏭️ Pulando para próxima conversa"
+        elif flagged:
+            # Reclamação detectada - display completo
+            display_message = "🚨 RECLAMAÇÃO DETECTADA!\n\n"
+            display_message += f"📋 {analysis}\n\n"
+            display_message += "🏷️ Marcando automaticamente no Duoke\n"
+            display_message += "💾 Salvando para revisão manual\n"
+            display_message += "⏱️ Processamento completo em andamento..."
         else:
-            display_message += "✅ Nenhuma reclamação detectada\n"
+            # Outros casos
+            display_message = "🔍 ANÁLISE CONCLUÍDA\n\n"
+            display_message += "✅ Sem problemas específicos\n"
             display_message += f"📋 {analysis}\n\n"
-            display_message += "👌 Conversa normal - sem marcação necessária"
+            display_message += "⏭️ Seguindo para próxima conversa"
         
         ws_broadcast(
             {
