@@ -135,6 +135,9 @@ HTML = Template(
           <div class="row" style="margin-top:8px;">
             <small class="mut">💡 O sistema agora apenas detecta e salva reclamações para revisão manual</small>
           </div>
+          <div class="row" style="margin-top:4px;">
+            <small class="mut">🔧 Para login manual: Clique "Iniciar Sessão Manual" → Faça login no navegador → Use "Enviar código" se necessário</small>
+          </div>
           <div class="row" style="margin-top:8px;">
             <a class="secondary" href="/export-cases" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Exportar CSV</a>
             <a class="secondary" href="/export-complaints" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">📊 Exportar Reclamações</a>
@@ -146,8 +149,11 @@ HTML = Template(
           </div>
 
           <div class="row" style="margin-top:8px;">
+            <button id="btnInitManual" class="secondary">🌐 Iniciar Sessão Manual</button>
             <button id="btnCloseModal" class="secondary">Fechar modal</button>
+          </div>
 
+          <div class="row" style="margin-top:8px;">
             <input id="codeInput" type="text" placeholder="Código de verificação" style="width:180px;">
             <button id="btnSendCode">Enviar código</button>
           </div>
@@ -626,14 +632,53 @@ document.getElementById('btnCloseModal').onclick = async () => {
   await fetch('/action/close-modal', {method:'POST'});
 };
 
+document.getElementById('btnInitManual').onclick = async () => {
+  const btn = document.getElementById('btnInitManual');
+  btn.disabled = true;
+  btn.textContent = '🌐 Iniciando...';
+  try {
+    const res = await fetch('/action/init-manual-session', { method: 'POST' });
+    const result = await res.json();
+    if (result.ok) {
+      btn.textContent = '✅ Sessão Ativa';
+      btn.style.backgroundColor = '#10b981';
+    } else {
+      throw new Error(result.error || 'Falha ao iniciar sessão');
+    }
+  } catch (e) {
+    alert('Erro ao iniciar sessão manual: ' + e.message);
+    btn.textContent = '🌐 Iniciar Sessão Manual';
+    btn.disabled = false;
+  }
+};
+
 document.getElementById('btnSendCode').onclick = async () => {
   const code = (document.getElementById('codeInput').value || '').trim();
   if (!code) { alert('Digite o código.'); return; }
-  await fetch('/action/submit-code', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ code })
-  });
+  
+  const btn = document.getElementById('btnSendCode');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+  
+  try {
+    const res = await fetch('/action/submit-code', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ code })
+    });
+    const result = await res.json();
+    if (result.ok) {
+      alert('✅ Código enviado com sucesso!');
+      document.getElementById('codeInput').value = '';
+    } else {
+      alert('❌ Erro: ' + (result.error || 'Falha ao enviar código'));
+    }
+  } catch (e) {
+    alert('❌ Erro de conexão: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Enviar código';
+  }
 };
 
 // ====== Duoke: conectar / desconectar / status ======
@@ -1068,6 +1113,16 @@ async def ws(ws: WebSocket):
 # ===== Bot Runner =====
 _task: Optional[asyncio.Task] = None
 _bot: Optional[DuokeBot] = None  # referência ao bot para espelho/ações
+_manual_bot: Optional[DuokeBot] = None  # bot para operações manuais (login, código, etc.)
+
+
+async def _ensure_manual_bot():
+    """Garante que temos um bot disponível para operações manuais"""
+    global _manual_bot
+    if _manual_bot is None:
+        _manual_bot = DuokeBot()
+        log("[UI] Bot manual inicializado para operações de login/código")
+    return _manual_bot
 
 
 async def _mirror_loop():
@@ -1213,7 +1268,8 @@ async def action_skip():
 
 @app.post("/action/close-modal")
 async def action_close_modal():
-    bot = _bot
+    # Tenta usar o bot em execução primeiro, senão usa o bot manual
+    bot = _bot or await _ensure_manual_bot()
     page = getattr(bot, "current_page", None) if bot else None
     if page and bot:
         try:
@@ -1225,6 +1281,8 @@ async def action_close_modal():
         except Exception as e:
             log(f"[UI] erro ao fechar modal: {type(e).__name__}: {e}")
             return JSONResponse({"ok": False, "error": str(e)})
+    else:
+        log("[UI] ⚠️ Nenhuma página ativa disponível para fechar modal")
     return JSONResponse({"ok": True})
 
 
@@ -1251,19 +1309,62 @@ async def action_mouse_click(req: Request):
 async def action_submit_code(req: Request):
     data = await req.json()
     code = (data.get("code") or "").strip()
-    bot = _bot
+    
+    if not code:
+        log("[UI] ❌ Código vazio fornecido")
+        return JSONResponse({"ok": False, "error": "Código vazio."})
+    
+    # Tenta usar o bot em execução primeiro, senão usa o bot manual
+    bot = _bot or await _ensure_manual_bot()
     page = getattr(bot, "current_page", None) if bot else None
-    if page and bot and code:
+    
+    if page and bot:
         try:
+            log(f"[UI] 🔐 Tentando enviar código de verificação: {code}")
             await bot.enter_verification_code(page, code)
             ws_broadcast({"snapshot": {"last_action": "code_submitted"}})
-            log("[UI] código de verificação enviado.")
+            log("[UI] ✅ Código de verificação enviado com sucesso")
+            return JSONResponse({"ok": True, "message": "Código enviado com sucesso"})
         except Exception as e:
-            log(f"[UI] erro ao enviar código: {type(e).__name__}: {e}")
-            return JSONResponse({"ok": False, "error": str(e)})
-    elif not code:
-        return JSONResponse({"ok": False, "error": "Código vazio."})
-    return JSONResponse({"ok": True})
+            log(f"[UI] ❌ Erro ao enviar código: {type(e).__name__}: {e}")
+            return JSONResponse({"ok": False, "error": f"Erro ao enviar código: {e}"})
+    else:
+        log("[UI] ⚠️ Nenhuma página ativa disponível para enviar código")
+        return JSONResponse({"ok": False, "error": "Nenhuma página ativa. Inicie o bot primeiro."})
+
+
+@app.post("/action/init-manual-session")
+async def action_init_manual_session():
+    """Inicializa uma sessão manual do navegador para login/operações manuais"""
+    try:
+        bot = await _ensure_manual_bot()
+        
+        # Se já tem uma página ativa, não precisa inicializar novamente
+        if getattr(bot, "current_page", None):
+            log("[UI] ✅ Sessão manual já ativa")
+            return JSONResponse({"ok": True, "message": "Sessão já ativa"})
+        
+        # Importa Playwright local
+        from playwright.async_api import async_playwright
+        
+        log("[UI] 🌐 Inicializando sessão manual do navegador...")
+        
+        # Inicia navegador para sessão manual
+        p = await async_playwright().start()
+        ctx = await bot._new_context(p)
+        page = await bot._get_page(ctx)
+        
+        # Navega para o Duoke
+        await page.goto("https://www.duoke.com/", 
+                       wait_until="domcontentloaded", 
+                       timeout=30000)
+        
+        log("[UI] ✅ Sessão manual iniciada - navegador aberto no Duoke")
+        return JSONResponse({"ok": True, "message": "Sessão manual iniciada com sucesso"})
+        
+    except Exception as e:
+        log(f"[UI] ❌ Erro ao inicializar sessão manual: {e}")
+        return JSONResponse({"ok": False, "error": f"Erro ao inicializar sessão: {e}"})
 
 
 @app.post("/action/take-control")
