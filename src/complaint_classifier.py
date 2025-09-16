@@ -44,11 +44,15 @@ class ComplaintClassifier:
         # Limita a análise às últimas 20 mensagens como solicitado
         recent_messages = buyer_only[-20:]
         
-        # Analisa as mensagens em busca de reclamações
+        # OTIMIZAÇÃO: Verifica primeiro se é conversa normal (pula rapidamente)
+        if self.detector.is_normal_conversation(recent_messages):
+            return False, f"⚡ Conversa normal detectada - PULANDO (perguntas/elogios/dúvidas normais)"
+        
+        # Analisa as mensagens em busca de reclamações específicas
         complaints = self.detector.analyze_messages(recent_messages, order_info)
         
         if not complaints:
-            return False, f"Nenhuma reclamação detectada (processadas {self.processed_conversations} conversas)"
+            return False, f"✅ Sem problemas específicos detectados (processadas {self.processed_conversations} conversas)"
         
         # Filtra apenas reclamações com confiança mínima
         significant_complaints = [c for c in complaints if c.confidence >= 0.3]
