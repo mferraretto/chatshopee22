@@ -29,11 +29,12 @@ from jinja2 import Template
 
 from src.duoke import DuokeBot
 from src.config import settings
-from src.classifier import decide_reply
+from src.complaint_classifier import decide_reply
 from src.rules import load_rules, save_rules
 from src.cases import export_to_excel, HEADER
 from src.history import fetch_all_histories
 from src.firebase_client import fetch_all_cases, mark_case_resolved
+from src.complaints_storage import get_pending_complaints, get_complaints_summary, mark_complaint_reviewed, COMPLAINTS_CSV_PATH
 from openpyxl import Workbook
 from playwright.async_api import TimeoutError as PWTimeoutError
 
@@ -127,16 +128,16 @@ HTML = Template(
         </div>
 
         <div class="card">
-          <h3 style="margin-top:0;">Leitura & Resposta</h3>
+          <h3 style="margin-top:0;">🔍 Monitor de Reclamações</h3>
           <div id="reading"></div>
-          <label style="display:block;margin-top:8px;">Resposta sugerida</label>
-          <textarea id="proposed" rows="6" style="width:100%;"></textarea>
+          <label style="display:block;margin-top:8px;">📊 Análise da Conversa</label>
+          <textarea id="proposed" rows="6" style="width:100%;" readonly></textarea>
           <div class="row" style="margin-top:8px;">
-            <button id="sendBtn">Enviar</button>
-            <button id="skipBtn" class="secondary">Pular</button>
+            <small class="mut">💡 O sistema agora apenas detecta e salva reclamações para revisão manual</small>
           </div>
           <div class="row" style="margin-top:8px;">
             <a class="secondary" href="/export-cases" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Exportar CSV</a>
+            <a class="secondary" href="/export-complaints" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">📊 Exportar Reclamações</a>
           </div>
 
           <div class="row" style="margin-top:8px;">
@@ -246,10 +247,30 @@ HTML = Template(
     <!-- ABA RECLAMAÇÕES -->
     <section id="pane-reclamacoes" style="display:none;">
       <div class="card">
-        <h3>Reclamações</h3>
+        <h3>🚨 Reclamações Detectadas Automaticamente</h3>
         <div class="row" style="margin-bottom:8px;">
-          <a class="secondary" href="/export-atendimentos" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Exportar planilha</a>
+          <a class="secondary" href="/export-complaints" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">📊 Exportar Reclamações</a>
+          <a class="secondary" href="/complaints-summary" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">📈 Ver Resumo</a>
         </div>
+        <div id="complaintsSummary" style="margin-bottom:16px;padding:12px;background:var(--card);border-radius:8px;"></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Data/Hora</th>
+              <th>Pedido</th>
+              <th>Comprador</th>
+              <th>Tipo</th>
+              <th>Confiança</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="complaintsBody"></tbody>
+        </table>
+      </div>
+      
+      <div class="card" style="margin-top:16px;">
+        <h4>Reclamações (Sistema Antigo)</h4>
         <table>
           <thead>
             <tr>
@@ -392,6 +413,65 @@ async function loadAtendimentos() {
 }
 
 async function loadReclamacoes() {
+  // Carrega reclamações detectadas automaticamente
+  const complaintsBody = document.getElementById('complaintsBody');
+  const summaryDiv = document.getElementById('complaintsSummary');
+  
+  if (complaintsBody) {
+    complaintsBody.innerHTML = '';
+    try {
+      const complaints = await fetch('/pending-complaints').then(r => r.json());
+      complaints.forEach(r => {
+        const tr = document.createElement('tr');
+        const confidence = parseFloat(r.confidence || '0');
+        const confidenceColor = confidence >= 0.7 ? '#10b981' : confidence >= 0.5 ? '#f59e0b' : '#ef4444';
+        const isReviewed = (r.status || '').toLowerCase() === 'revisado';
+        
+        tr.innerHTML = `
+          <td>${r.timestamp_utc||''}</td>
+          <td>${r.order_id||''}</td>
+          <td>${r.buyer_name||''}</td>
+          <td>${r.complaint_type||''}</td>
+          <td style="color:${confidenceColor}">${r.confidence||'0'}</td>
+          <td>${r.status||'Novo'}</td>
+          <td>${isReviewed ? '✅ Revisado' : `<button class="reviewComplaint" data-id="${r.order_id}">Marcar como revisado</button>`}</td>
+        `;
+        complaintsBody.appendChild(tr);
+      });
+      
+      // Adiciona event listeners para marcar como revisado
+      complaintsBody.querySelectorAll('.reviewComplaint').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const notes = prompt('Notas sobre a revisão (opcional):');
+          await fetch(`/mark-complaint-reviewed/${encodeURIComponent(btn.dataset.id)}`, { 
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({notes: notes || ''})
+          });
+          await loadReclamacoes();
+        });
+      });
+    } catch (e) {
+      console.error('falha ao carregar reclamações detectadas', e);
+    }
+  }
+  
+  // Carrega resumo
+  if (summaryDiv) {
+    try {
+      const summary = await fetch('/complaints-summary').then(r => r.json());
+      summaryDiv.innerHTML = `
+        <strong>📊 Resumo:</strong> 
+        ${summary.total} total | 
+        ${summary.pending} pendentes | 
+        ${summary.high_confidence} alta confiança
+      `;
+    } catch (e) {
+      console.error('falha ao carregar resumo', e);
+    }
+  }
+
+  // Carrega reclamações do sistema antigo
   const tbody = document.getElementById('reclBody');
   if (!tbody) return;
   tbody.innerHTML = '';
@@ -399,7 +479,7 @@ async function loadReclamacoes() {
   try {
     data = await fetch('/complaints').then(r => r.json());
   } catch (e) {
-    console.error('falha ao carregar reclamações', e);
+    console.error('falha ao carregar reclamações antigas', e);
   }
   const allowed = ['reembolso', 'peças faltando', 'pix'];
   data = data.filter(r => {
@@ -699,6 +779,38 @@ async def export_history():
     return FileResponse(str(p), media_type="application/json", filename="history.json")
 
 
+@app.get("/export-complaints")
+async def export_complaints():
+    """Exporta reclamações detectadas para download"""
+    if not COMPLAINTS_CSV_PATH.exists():
+        return JSONResponse({"ok": False, "error": "Nenhuma reclamação detectada ainda."}, status_code=404)
+    
+    return FileResponse(
+        str(COMPLAINTS_CSV_PATH), 
+        media_type="text/csv", 
+        filename="reclamacoes_detectadas.csv"
+    )
+
+
+@app.get("/complaints-summary")
+async def complaints_summary():
+    """Retorna resumo das reclamações detectadas"""
+    return get_complaints_summary()
+
+
+@app.get("/pending-complaints")  
+async def pending_complaints():
+    """Retorna reclamações pendentes de análise"""
+    return get_pending_complaints()
+
+
+@app.post("/mark-complaint-reviewed/{order_id}")
+async def mark_complaint_reviewed_route(order_id: str, notes: str = ""):
+    """Marca uma reclamação como revisada"""
+    success = mark_complaint_reviewed(order_id, notes)
+    return {"ok": success}
+
+
 # Monta /static somente se a pasta existir (evita erro em ambientes sem assets)
 static_dir = Path("static")
 if static_dir.exists() and static_dir.is_dir():
@@ -981,28 +1093,39 @@ async def _run_cycle(run_once: bool):
     LAST_ERR = None
     _bot = DuokeBot()
 
-    # Hook para UI ver o que foi lido e a resposta sugerida
+    # Hook para UI ver o que foi lido e análise de reclamações
     async def hook(pairs, buyer_only, order_info=None) -> tuple[bool, str]:
         ws_broadcast(
             {
                 "snapshot": {
                     "reading": [list(p) for p in pairs],
-                    "proposed": "",
+                    "proposed": "Analisando conversas para detectar reclamações...",
                     "running": True,
                 }
             }
         )
-        should, reply = decide_reply(pairs, buyer_only, order_info)
+        flagged, analysis = decide_reply(pairs, buyer_only, order_info)
+        
+        # Mostra resultado da análise em vez de resposta sugerida
+        display_message = "🔍 ANÁLISE CONCLUÍDA\n\n"
+        if flagged:
+            display_message += "🚨 RECLAMAÇÃO DETECTADA!\n"
+            display_message += f"📋 {analysis}\n\n"
+            display_message += "💾 Conversa salva para revisão manual"
+        else:
+            display_message += "✅ Nenhuma reclamação detectada\n"
+            display_message += f"📋 {analysis}"
+        
         ws_broadcast(
             {
                 "snapshot": {
                     "reading": [list(p) for p in pairs],
-                    "proposed": reply,
+                    "proposed": display_message,
                     "running": True,
                 }
             }
         )
-        return should, reply
+        return False, display_message  # Sempre False - não responde mais automaticamente
 
     mirror_task = asyncio.create_task(_mirror_loop())
     try:
