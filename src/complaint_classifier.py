@@ -63,7 +63,14 @@ class ComplaintClassifier:
             
             # Cria resumo das reclamações detectadas
             complaint_types = []
+            primary_complaint_type = None
+            highest_confidence = 0.0
+            
             for complaint in significant_complaints:
+                if complaint.confidence > highest_confidence:
+                    highest_confidence = complaint.confidence
+                    primary_complaint_type = complaint.type
+                    
                 if complaint.type == 'falta_peca':
                     complaint_types.append(f"Falta de peça (conf: {complaint.confidence:.2f})")
                 elif complaint.type == 'quebra':
@@ -71,7 +78,9 @@ class ComplaintClassifier:
                 else:
                     complaint_types.append(f"{complaint.type} (conf: {complaint.confidence:.2f})")
             
+            # Inclui o tipo principal na resposta para o sistema de tags
             reason = f"🚨 RECLAMAÇÃO DETECTADA: {', '.join(complaint_types)}"
+            reason += f"\n🏷️ Tipo principal: {primary_complaint_type}"
             reason += f"\n💾 Salvo para revisão manual ({self.flagged_conversations}/{self.processed_conversations} conversas marcadas)"
             
             return True, reason

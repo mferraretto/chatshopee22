@@ -764,6 +764,145 @@ class DuokeBot:
         info["buyer_name"] = buyer_name
         return info
 
+    # ---------- sistema de tags ----------
+
+    async def mark_conversation_with_tag(self, page, complaint_type: str) -> bool:
+        """Marca a conversa com uma tag visual baseada no tipo de reclamação detectada"""
+        try:
+            print(f"[DEBUG] 🏷️ Iniciando marcação com tag para tipo: {complaint_type}")
+            
+            # 1. BUSCA E CLICA NO ÍCONE DE BANDEIRINHA
+            tag_icon_selectors = [
+                'i[data-v-29ac6776][class*="icon_mark_1"]',
+                'i.icon_mark_1',
+                'i[class*="icon_mark"]',
+                '[class*="contact_action_icon"] i',
+                'span[class*="contact_action_icon"]'
+            ]
+            
+            tag_clicked = False
+            for selector in tag_icon_selectors:
+                try:
+                    tag_icon = page.locator(selector)
+                    if await tag_icon.count() > 0:
+                        await tag_icon.first.click()
+                        tag_clicked = True
+                        print(f"[DEBUG] Ícone de tag clicado com seletor: {selector}")
+                        break
+                except Exception as e:
+                    print(f"[DEBUG] Falha com seletor {selector}: {e}")
+                    continue
+            
+            if not tag_clicked:
+                print("[DEBUG] ❌ Não foi possível clicar no ícone de tag")
+                return False
+            
+            # Aguarda o modal abrir
+            await page.wait_for_timeout(1500)
+            
+            # 2. MAPEIA TIPOS PARA ETIQUETAS DISPONÍVEIS
+            tag_mapping = {
+                'falta_peca': [
+                    'FALTA DE PEÇA', 'FALTA DE PECA', 'FALTA PEÇA', 'FALTA PECA'
+                ],
+                'quebra': [
+                    'QUEBRAS/DEFEITOS', 'QUEBRAS DEFEITOS', 'QUEBRA', 'DEFEITO', 
+                    'OUTROS PROBLEMAS'
+                ],
+                'outro': ['OUTROS PROBLEMAS']
+            }
+            
+            tag_options = tag_mapping.get(complaint_type, ['OUTROS PROBLEMAS'])
+            print(f"[DEBUG] Tentando tags: {tag_options}")
+            
+            # 3. TENTA SELECIONAR UMA DAS ETIQUETAS
+            tag_selected = False
+            for tag_text in tag_options:
+                try:
+                    # Diferentes abordagens para encontrar a etiqueta
+                    selectors_to_try = [
+                        f'span:text("{tag_text}")',
+                        f'span:has-text("{tag_text}")',
+                        f'[class*="label_item_name"]:has-text("{tag_text}")',
+                        f'div:has-text("{tag_text}")',
+                        f'*:has-text("{tag_text}"):visible'
+                    ]
+                    
+                    for sel in selectors_to_try:
+                        tag_element = page.locator(sel)
+                        if await tag_element.count() > 0:
+                            await tag_element.first.click()
+                            tag_selected = True
+                            print(f"[DEBUG] ✅ Tag selecionada: {tag_text} (seletor: {sel})")
+                            break
+                    
+                    if tag_selected:
+                        break
+                        
+                except Exception as e:
+                    print(f"[DEBUG] Erro ao selecionar tag '{tag_text}': {e}")
+                    continue
+            
+            # Fallback: tenta qualquer "OUTROS PROBLEMAS" se não selecionou nada
+            if not tag_selected:
+                try:
+                    fallback_selectors = [
+                        'span:has-text("OUTROS PROBLEMAS")',
+                        'span:has-text("OUTROS")',
+                        '[class*="label_item"]:first-child'
+                    ]
+                    
+                    for sel in fallback_selectors:
+                        fallback_element = page.locator(sel)
+                        if await fallback_element.count() > 0:
+                            await fallback_element.first.click()
+                            tag_selected = True
+                            print(f"[DEBUG] ✅ Tag fallback selecionada com: {sel}")
+                            break
+                except Exception as e:
+                    print(f"[DEBUG] Erro no fallback: {e}")
+            
+            if not tag_selected:
+                print("[DEBUG] ❌ Nenhuma tag foi selecionada")
+                return False
+            
+            await page.wait_for_timeout(800)
+            
+            # 4. CLICA EM "CONFIRM" PARA APLICAR A TAG
+            confirm_selectors = [
+                'span:text("Confirm")',
+                'button:has-text("Confirm")', 
+                '[class*="el-button--primary"]:has-text("Confirm")',
+                'button[fdprocessedid]:has-text("Confirm")'
+            ]
+            
+            confirm_clicked = False
+            for sel in confirm_selectors:
+                try:
+                    confirm_element = page.locator(sel)
+                    if await confirm_element.count() > 0:
+                        await confirm_element.first.click()
+                        confirm_clicked = True
+                        print(f"[DEBUG] ✅ Confirm clicado com: {sel}")
+                        break
+                except Exception as e:
+                    print(f"[DEBUG] Erro ao clicar Confirm com {sel}: {e}")
+                    continue
+            
+            if not confirm_clicked:
+                print("[DEBUG] ⚠️ Não foi possível clicar em Confirm")
+                return False
+            
+            # Aguarda o modal fechar
+            await page.wait_for_timeout(1000)
+            
+            print(f"[DEBUG] 🎉 Conversa marcada com sucesso com tag para {complaint_type}")
+            return True
+            
+        except Exception as e:
+            print(f"[DEBUG] ❌ Erro geral ao marcar conversa com tag: {e}")
+            return False
+
     # ---------- envio de resposta ----------
 
     async def send_reply(self, page, text: str):
@@ -1135,7 +1274,7 @@ class DuokeBot:
                 print("[DEBUG] conversa registrada (pendência manual)")
                 continue
 
-            # ----- NOVO: classificador de reclamações (sem resposta) -----
+            # ----- NOVO: classificador de reclamações e marcação visual -----
             flagged = False
             analysis_result = ""
             try:
@@ -1143,8 +1282,41 @@ class DuokeBot:
                 flagged, analysis_result = complaint_decide_reply(pairs, buyer_only, order_info)
                 print(f"[DEBUG] Análise: {analysis_result}")
                 
-                # Se há reclamação detectada, registra também no sistema antigo para compatibilidade
+                # Se há reclamação detectada, marca visualmente E registra nos sistemas
                 if flagged or any(keyword in analysis_result.lower() for keyword in ['reclamação', 'marcado']):
+                    
+                    # 1. MARCA VISUALMENTE A CONVERSA COM TAG
+                    try:
+                        # Detecta o tipo de reclamação para escolher a tag correta
+                        complaint_type = 'outro'  # padrão
+                        
+                        # Analisa o resultado para extrair o tipo principal
+                        analysis_lower = analysis_result.lower()
+                        if 'tipo principal:' in analysis_lower:
+                            # Extrai o tipo principal da resposta do classifier
+                            import re
+                            match = re.search(r'tipo principal:\s*(\w+)', analysis_lower)
+                            if match:
+                                detected_type = match.group(1)
+                                complaint_type = detected_type
+                        else:
+                            # Fallback para detecção baseada em palavras-chave
+                            if any(keyword in analysis_lower for keyword in ['falta de peça', 'falta de peca', 'missing']):
+                                complaint_type = 'falta_peca'
+                            elif any(keyword in analysis_lower for keyword in ['quebra', 'defeito', 'broken']):
+                                complaint_type = 'quebra'
+                        
+                        # Marca a conversa com a tag visual apropriada
+                        tag_success = await self.mark_conversation_with_tag(page, complaint_type)
+                        if tag_success:
+                            print(f"[DEBUG] 🏷️ Conversa marcada visualmente com tag {complaint_type}")
+                        else:
+                            print("[DEBUG] ⚠️ Falha ao marcar conversa visualmente, mas continuando...")
+                            
+                    except Exception as e:
+                        print(f"[DEBUG] ❌ Erro ao marcar visualmente: {e}")
+                    
+                    # 2. REGISTRA NOS SISTEMAS DE DADOS
                     try:
                         log_case(order_info, buyer_only)
                         log_label(order_info, buyer_only)
@@ -1158,8 +1330,8 @@ class DuokeBot:
                 print(f"[DEBUG] erro no classificador de reclamações: {e}")
                 analysis_result = f"Erro na análise: {e}"
 
-            # REMOVIDO: não enviamos mais respostas automáticas
-            # A função agora apenas detecta e salva reclamações para revisão manual
+            # SISTEMA TRANSFORMADO: detecta reclamações, marca visualmente e salva para revisão manual
+            # NÃO ENVIA MAIS RESPOSTAS AUTOMÁTICAS
 
     async def run_once(self, decide_reply_fn):
         """Modo pontual (mantido por compat)."""
