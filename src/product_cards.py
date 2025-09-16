@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 
 from playwright.async_api import Page, TimeoutError as PWTimeoutError
 
-from .gemini_client import send_product_payload
+# Gemini removido - sistema agora apenas detecta reclamações
 
 PROCESSED_ATTR = "data-product-processed"
 
@@ -35,13 +35,9 @@ async def _process_card(chat_page: Page, card, pairs: List[tuple[str, str]]):
     product = await extract_product_data(new_page)
     await new_page.close()
 
-    contexto = "\n".join(f"{r}: {t}" for r, t in pairs[-8:])
-    objetivo = (
-        "validar se o produto bate com a dúvida do cliente, sugerir resposta curta e humana, "
-        "checar preço/título"
-    )
-    resp = send_product_payload(product, contexto, objetivo)
-    print(f"[DEBUG] Gemini: {resp}")
+    # Gemini removido - sistema agora apenas detecta reclamações
+    print(f"[DEBUG] Produto detectado: {product.get('name', 'Desconhecido')} - SKU: {product.get('sku', 'N/A')}")
+    print(f"[DEBUG] Sistema transformado: não analisa mais produtos, apenas detecta reclamações")
 
 
 async def _open_product_page(page: Page, card) -> Page:

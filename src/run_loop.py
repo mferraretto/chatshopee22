@@ -3,7 +3,7 @@ import os
 import asyncio
 from pathlib import Path
 from .duoke import DuokeBot
-from .classifier import decide_reply
+from .complaint_classifier import decide_reply
 from .cases import export_to_excel
 
 DEFAULT_INTERVAL = float(os.getenv("LOOP_INTERVAL_SECONDS", "5"))
