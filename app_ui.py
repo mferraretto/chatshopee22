@@ -608,31 +608,36 @@ function connectWS(){
 }
 connectWS();
 
-document.getElementById('sendBtn').onclick = async () => {
-  await fetch('/action/send', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text: proposed.value})});
-}
-document.getElementById('skipBtn').onclick = async () => {
-  await fetch('/action/skip', {method:'POST'});
-}
+// Botões sendBtn e skipBtn foram removidos - sistema não responde mais automaticamente
 
+// Event listeners para controle manual
 const takeBtn = document.getElementById('btnTakeControl');
 const releaseBtn = document.getElementById('btnReleaseControl');
-takeBtn.onclick = async () => {
-  await fetch('/action/take-control', {method:'POST'});
-  takeBtn.disabled = true;
-  releaseBtn.disabled = false;
-};
-releaseBtn.onclick = async () => {
-  await fetch('/action/release-control', {method:'POST'});
-  takeBtn.disabled = false;
-  releaseBtn.disabled = true;
-};
+if (takeBtn && releaseBtn) {
+  takeBtn.onclick = async () => {
+    await fetch('/action/take-control', {method:'POST'});
+    takeBtn.disabled = true;
+    releaseBtn.disabled = false;
+  };
+  releaseBtn.onclick = async () => {
+    await fetch('/action/release-control', {method:'POST'});
+    takeBtn.disabled = false;
+    releaseBtn.disabled = true;
+  };
+}
 
-document.getElementById('btnCloseModal').onclick = async () => {
-  await fetch('/action/close-modal', {method:'POST'});
-};
+// Event listener para fechar modal
+const btnCloseModal = document.getElementById('btnCloseModal');
+if (btnCloseModal) {
+  btnCloseModal.onclick = async () => {
+    await fetch('/action/close-modal', {method:'POST'});
+  };
+}
 
-document.getElementById('btnInitManual').onclick = async () => {
+// Event listener para iniciar sessão manual
+const btnInitManual = document.getElementById('btnInitManual');
+if (btnInitManual) {
+  btnInitManual.onclick = async () => {
   const btn = document.getElementById('btnInitManual');
   btn.disabled = true;
   btn.textContent = '🌐 Iniciando...';
@@ -650,9 +655,13 @@ document.getElementById('btnInitManual').onclick = async () => {
     btn.textContent = '🌐 Iniciar Sessão Manual';
     btn.disabled = false;
   }
-};
+  };
+}
 
-document.getElementById('btnSendCode').onclick = async () => {
+// Event listener para enviar código
+const btnSendCode = document.getElementById('btnSendCode');
+if (btnSendCode) {
+  btnSendCode.onclick = async () => {
   const code = (document.getElementById('codeInput').value || '').trim();
   if (!code) { alert('Digite o código.'); return; }
   
@@ -679,7 +688,8 @@ document.getElementById('btnSendCode').onclick = async () => {
     btn.disabled = false;
     btn.textContent = 'Enviar código';
   }
-};
+  };
+}
 
 // ====== Duoke: conectar / desconectar / status ======
 async function refreshDuokeStatus(){
@@ -694,27 +704,34 @@ async function refreshDuokeStatus(){
 }
 refreshDuokeStatus();
 
-document.getElementById('duoke-connect').addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const btn = document.getElementById('btnDuokeConnect');
-  btn.disabled = true;
-  btn.textContent = 'Conectando...';
-  try{
-    const res = await fetch('/duoke/connect', { method:'POST', body: fd });
-    if(!res.ok){ const t = await res.text(); alert('Falha ao conectar: ' + t); }
-    else { alert('Duoke conectado!'); }
-  }catch(err){
-    alert('Erro: ' + err);
-  }finally{
-    btn.disabled = false;
-    btn.textContent = 'Conectar ao Duoke';
-    refreshDiokeStatus = null; // noop
-    await refreshDuokeStatus();
-  }
-});
+// Event listener para formulário de conexão Duoke
+const duokeConnectForm = document.getElementById('duoke-connect');
+if (duokeConnectForm) {
+  duokeConnectForm.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const btn = document.getElementById('btnDuokeConnect');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = 'Conectando...';
+    try{
+      const res = await fetch('/duoke/connect', { method:'POST', body: fd });
+      if(!res.ok){ const t = await res.text(); alert('Falha ao conectar: ' + t); }
+      else { alert('Duoke conectado!'); }
+    }catch(err){
+      alert('Erro: ' + err);
+    }finally{
+      btn.disabled = false;
+      btn.textContent = 'Conectar ao Duoke';
+      await refreshDuokeStatus();
+    }
+  });
+}
 
-document.getElementById('btnDuokeDisconnect').addEventListener('click', async ()=>{
+// Event listener para desconectar Duoke
+const btnDuokeDisconnect = document.getElementById('btnDuokeDisconnect');
+if (btnDuokeDisconnect) {
+  btnDuokeDisconnect.addEventListener('click', async ()=>{
   if(!confirm('Remover sessão do Duoke deste servidor?')) return;
   const btn = document.getElementById('btnDuokeDisconnect');
   btn.disabled = true;
@@ -726,7 +743,8 @@ document.getElementById('btnDuokeDisconnect').addEventListener('click', async ()
     btn.disabled = false;
     await refreshDuokeStatus();
   }
-});
+  });
+}
 </script>
 </body>
 </html>
