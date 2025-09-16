@@ -17,8 +17,12 @@ O sistema foi **completamente transformado** conforme solicitação:
    - 🔧 **Falta de peças/partes**
    - 💔 **Quebras/defeitos**  
    - 📝 **Outros problemas relacionados**
-4. **💾 Salva Dados**: Marca e salva casos detectados para revisão manual
-5. **❌ NÃO RESPONDE**: Sistema não envia mais respostas automáticas
+4. **🏷️ MARCA VISUALMENTE**: Clica automaticamente na bandeirinha do Duoke e aplica tag apropriada:
+   - **FALTA DE PEÇA** → Para problemas de peças faltantes
+   - **QUEBRAS/DEFEITOS** → Para produtos quebrados
+   - **OUTROS PROBLEMAS** → Para outros tipos de reclamação
+5. **💾 Salva Dados**: Registra casos detectados para revisão manual
+6. **❌ NÃO RESPONDE**: Sistema não envia mais respostas automáticas
 
 ## 📁 NOVOS ARQUIVOS CRIADOS
 
@@ -73,9 +77,23 @@ Contém todas as reclamações detectadas com:
 
 1. **▶️ Inicie o sistema** através da interface web
 2. **📊 Monitore** na aba "🔍 Monitor de Reclamações"
-3. **👀 Visualize** reclamações detectadas na aba "🚨 Reclamações" 
-4. **📥 Exporte** dados usando os botões de exportação
-5. **✅ Marque** casos como revisados após análise manual
+3. **👀 Observe** conversas sendo marcadas automaticamente no Duoke com tags visuais
+4. **📋 Visualize** reclamações detectadas na aba "🚨 Reclamações" 
+5. **📥 Exporte** dados usando os botões de exportação
+6. **✅ Marque** casos como revisados após análise manual
+
+## 🏷️ SISTEMA DE MARCAÇÃO VISUAL
+
+O sistema agora **marca automaticamente** as conversas no Duoke:
+
+1. **🔍 Detecta reclamação** → Analisa mensagens do cliente
+2. **🏷️ Clica na bandeirinha** → Busca elemento `<i class="icon_mark_1">`
+3. **🎯 Seleciona tag apropriada** → Baseado no tipo de problema:
+   - `falta_peca` → **"FALTA DE PEÇA"**
+   - `quebra` → **"QUEBRAS/DEFEITOS"** 
+   - `outro` → **"OUTROS PROBLEMAS"**
+4. **✅ Confirma** → Clica no botão "Confirm"
+5. **💾 Salva dados** → Para controle e relatórios
 
 ## 📊 EXEMPLO DE DETECÇÃO
 
@@ -86,22 +104,31 @@ Contém todas as reclamações detectadas com:
 "O produto chegou quebrado"
 ```
 
-### Sistema detecta:
+### Sistema detecta e executa:
 - 🏷️ **Tipo**: "Falta de Peça" 
 - 📊 **Confiança**: 0.85
-- 🚨 **Status**: Marcado para revisão
-- 💾 **Ação**: Salvo automaticamente
+- 🎯 **Marcação visual**: Clica bandeirinha → Seleciona "FALTA DE PEÇA" → Confirm
+- 🚨 **Status**: Conversa taggeada no Duoke automaticamente
+- 💾 **Dados**: Salvos para revisão e relatórios
 
 ## ⚠️ IMPORTANTE
 
 - ❌ **Sistema não responde mais** automaticamente aos clientes
-- 🔍 **Apenas detecta e marca** reclamações para revisão humana  
+- 🏷️ **Marca conversas visualmente** no Duoke com tags apropriadas
+- 🔍 **Detecta e registra** reclamações para revisão humana  
 - 📊 **Todas as detecções** são salvas com timestamp e dados completos
 - ✅ **Interface web** permite acompanhar e gerenciar casos detectados
 
-## 🎉 RESULTADO
+## 🎉 RESULTADO FINAL
 
-✅ Sistema transformado com sucesso conforme solicitado!
-✅ Gemini completamente removido
-✅ Foco exclusivo em detectar reclamações
-✅ Todas as reclamações salvas para revisão manual
+✅ **Sistema completamente transformado** conforme solicitado!
+✅ **Gemini removido** - sem respostas automáticas
+✅ **Marcação visual automática** - tags aplicadas no Duoke  
+✅ **Detecção inteligente** - últimas 20 mensagens analisadas
+✅ **Foco exclusivo** em identificar reclamações específicas:
+   - 🔧 Falta de peças/partes
+   - 💔 Quebras e defeitos
+✅ **Duplo registro** - dados salvos + marcação visual
+✅ **Interface moderna** para monitoramento e relatórios
+
+**🎯 MISSÃO CUMPRIDA:** Sistema agora funciona como um **monitor inteligente** que identifica automaticamente conversas com problemas, **marca-as visualmente no Duoke** e salva todos os dados para que você possa dar atenção manual adequada aos casos que realmente precisam!

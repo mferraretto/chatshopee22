@@ -1111,10 +1111,12 @@ async def _run_cycle(run_once: bool):
         if flagged:
             display_message += "🚨 RECLAMAÇÃO DETECTADA!\n"
             display_message += f"📋 {analysis}\n\n"
-            display_message += "💾 Conversa salva para revisão manual"
+            display_message += "🏷️ Conversa marcada automaticamente no Duoke\n"
+            display_message += "💾 Dados salvos para revisão manual"
         else:
             display_message += "✅ Nenhuma reclamação detectada\n"
-            display_message += f"📋 {analysis}"
+            display_message += f"📋 {analysis}\n\n"
+            display_message += "👌 Conversa normal - sem marcação necessária"
         
         ws_broadcast(
             {
