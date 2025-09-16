@@ -866,35 +866,143 @@ class DuokeBot:
                 print("[DEBUG] ❌ Nenhuma tag foi selecionada")
                 return False
             
-            await page.wait_for_timeout(800)
+            print("[DEBUG] ⏱️ Aguardando modal de confirmação aparecer...")
+            await page.wait_for_timeout(1200)  # Mais tempo para modal renderizar
             
             # 4. CLICA EM "CONFIRM" PARA APLICAR A TAG
-            confirm_selectors = [
-                'span:text("Confirm")',
-                'button:has-text("Confirm")', 
-                '[class*="el-button--primary"]:has-text("Confirm")',
-                'button[fdprocessedid]:has-text("Confirm")'
+            print("[DEBUG] 🎯 Procurando botão Confirm...")
+            
+            # Estratégias múltiplas para encontrar o botão Confirm
+            confirm_strategies = [
+                # Estratégia 1: Seletores específicos
+                {
+                    'name': 'Seletores específicos',
+                    'selectors': [
+                        'button:has-text("Confirm")',
+                        'span:text("Confirm")',
+                        '[class*="el-button--primary"]:has-text("Confirm")',
+                        'button[class*="el-button--primary"]',
+                        'button[fdprocessedid]:has-text("Confirm")',
+                        '.el-dialog__footer button[class*="primary"]',
+                        '.el-message-box__btns button[class*="primary"]'
+                    ]
+                },
+                # Estratégia 2: Por posição (último botão visível)
+                {
+                    'name': 'Botão primário visível',
+                    'selectors': [
+                        'button:visible:last-child',
+                        'button[class*="primary"]:visible',
+                        '.el-dialog__footer button:last-child',
+                        '.el-message-box__btns button:last-child'
+                    ]
+                }
             ]
             
             confirm_clicked = False
-            for sel in confirm_selectors:
+            
+            for strategy in confirm_strategies:
+                if confirm_clicked:
+                    break
+                    
+                print(f"[DEBUG] 🔍 Tentando: {strategy['name']}")
+                
+                for sel in strategy['selectors']:
+                    try:
+                        confirm_element = page.locator(sel)
+                        count = await confirm_element.count()
+                        
+                        if count > 0:
+                            print(f"[DEBUG] 👆 Encontrou {count} elemento(s) com: {sel}")
+                            
+                            # Tenta clicar no primeiro elemento visível
+                            element = confirm_element.first
+                            
+                            # Verifica se é visível
+                            is_visible = await element.is_visible() if await element.count() > 0 else False
+                            if is_visible:
+                                await element.click()
+                                confirm_clicked = True
+                                print(f"[DEBUG] ✅ Confirm clicado com sucesso: {sel}")
+                                break
+                            else:
+                                print(f"[DEBUG] ⚠️ Elemento não visível: {sel}")
+                                
+                    except Exception as e:
+                        print(f"[DEBUG] ❌ Erro com seletor {sel}: {e}")
+                        continue
+            
+            # Estratégia 3: Fallback com JavaScript
+            if not confirm_clicked:
+                print("[DEBUG] 🔧 Tentando fallback JavaScript...")
                 try:
-                    confirm_element = page.locator(sel)
-                    if await confirm_element.count() > 0:
-                        await confirm_element.first.click()
+                    # Busca por texto "Confirm" em botões via JavaScript
+                    js_result = await page.evaluate("""
+                        () => {
+                            const buttons = Array.from(document.querySelectorAll('button, span'));
+                            const confirmBtn = buttons.find(btn => {
+                                const text = (btn.textContent || '').trim().toLowerCase();
+                                return text === 'confirm' || text === 'confirmar';
+                            });
+                            if (confirmBtn && confirmBtn.offsetParent) {
+                                confirmBtn.click();
+                                return true;
+                            }
+                            return false;
+                        }
+                    """)
+                    
+                    if js_result:
                         confirm_clicked = True
-                        print(f"[DEBUG] ✅ Confirm clicado com: {sel}")
-                        break
+                        print("[DEBUG] ✅ Confirm clicado via JavaScript")
+                    else:
+                        print("[DEBUG] ❌ JavaScript não encontrou botão Confirm")
+                        
                 except Exception as e:
-                    print(f"[DEBUG] Erro ao clicar Confirm com {sel}: {e}")
-                    continue
+                    print(f"[DEBUG] ❌ Erro no fallback JavaScript: {e}")
+            
+            # Estratégia 4: Enter como último recurso
+            if not confirm_clicked:
+                print("[DEBUG] ⌨️ Tentando tecla Enter como último recurso...")
+                try:
+                    await page.keyboard.press("Enter")
+                    confirm_clicked = True
+                    print("[DEBUG] ✅ Enter pressionado")
+                except Exception as e:
+                    print(f"[DEBUG] ❌ Erro ao pressionar Enter: {e}")
             
             if not confirm_clicked:
-                print("[DEBUG] ⚠️ Não foi possível clicar em Confirm")
+                print("[DEBUG] ❌ FALHA: Não foi possível confirmar a tag")
+                # Tenta fechar o modal mesmo assim
+                try:
+                    await page.keyboard.press("Escape")
+                    print("[DEBUG] 🚫 Modal fechado com Escape")
+                except Exception:
+                    pass
                 return False
             
-            # Aguarda o modal fechar
-            await page.wait_for_timeout(1000)
+            # Aguarda o modal fechar e a tag ser aplicada
+            print("[DEBUG] ⏱️ Aguardando modal fechar e tag ser aplicada...")
+            await page.wait_for_timeout(2000)  # Mais tempo para garantir que a tag seja aplicada
+            
+            # Verifica se o modal realmente fechou
+            try:
+                modal_closed = await page.evaluate("""
+                    () => {
+                        // Verifica se não há mais modais visíveis
+                        const modals = document.querySelectorAll('.el-dialog__wrapper, .el-message-box__wrapper, [role="dialog"]');
+                        return Array.from(modals).every(modal => 
+                            !modal.offsetParent || modal.style.display === 'none'
+                        );
+                    }
+                """)
+                
+                if modal_closed:
+                    print("[DEBUG] ✅ Modal fechado com sucesso")
+                else:
+                    print("[DEBUG] ⚠️ Modal pode ainda estar aberto")
+            except Exception as e:
+                print(f"[DEBUG] ❓ Não foi possível verificar se modal fechou: {e}")
             
             print(f"[DEBUG] 🎉 Conversa marcada com sucesso com tag para {complaint_type}")
             return True
@@ -1274,15 +1382,21 @@ class DuokeBot:
                 print("[DEBUG] conversa registrada (pendência manual)")
                 continue
 
-            # ----- NOVO: classificador de reclamações e marcação visual -----
+            # ----- ANÁLISE RÁPIDA: detecta se há reclamações específicas -----
             flagged = False
             analysis_result = ""
             try:
                 # Usa o novo classificador que detecta reclamações
                 flagged, analysis_result = complaint_decide_reply(pairs, buyer_only, order_info)
-                print(f"[DEBUG] Análise: {analysis_result}")
+                print(f"[DEBUG] 🔍 Análise: {analysis_result}")
                 
-                # Se há reclamação detectada, marca visualmente E registra nos sistemas
+                # ✅ SE NÃO HÁ RECLAMAÇÃO: PULA RAPIDAMENTE PARA PRÓXIMA CONVERSA
+                if not flagged and not any(keyword in analysis_result.lower() for keyword in ['reclamação', 'marcado']):
+                    print("[DEBUG] ⚡ Conversa normal - PULANDO para próxima (sem problemas detectados)")
+                    continue
+                
+                # 🚨 SE HÁ RECLAMAÇÃO DETECTADA: Processa marcação e registro
+                print(f"[DEBUG] 🚨 RECLAMAÇÃO DETECTADA - Iniciando processamento completo...")
                 if flagged or any(keyword in analysis_result.lower() for keyword in ['reclamação', 'marcado']):
                     
                     # 1. MARCA VISUALMENTE A CONVERSA COM TAG
@@ -1307,11 +1421,16 @@ class DuokeBot:
                                 complaint_type = 'quebra'
                         
                         # Marca a conversa com a tag visual apropriada
+                        print(f"[DEBUG] 🎯 Iniciando marcação visual para tipo: {complaint_type}")
                         tag_success = await self.mark_conversation_with_tag(page, complaint_type)
+                        
                         if tag_success:
-                            print(f"[DEBUG] 🏷️ Conversa marcada visualmente com tag {complaint_type}")
+                            print(f"[DEBUG] 🎉 ✅ Conversa marcada visualmente com tag '{complaint_type}' COM SUCESSO!")
+                            # Aguarda mais um tempo para garantir que a tag foi aplicada completamente
+                            print("[DEBUG] ⏱️ Aguardando estabilização após marcação...")
+                            await page.wait_for_timeout(1500)
                         else:
-                            print("[DEBUG] ⚠️ Falha ao marcar conversa visualmente, mas continuando...")
+                            print(f"[DEBUG] ❌ ⚠️ FALHA ao marcar conversa visualmente com tag '{complaint_type}' - continuando sem marcação")
                             
                     except Exception as e:
                         print(f"[DEBUG] ❌ Erro ao marcar visualmente: {e}")
