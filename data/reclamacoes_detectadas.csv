@@ -1,0 +1,2 @@
+timestamp_utc,detected_at,order_id,buyer_name,produto,variacao,sku,complaint_type,confidence,keywords_found,relevant_messages,status,marked_for_review,notes
+2025-09-16T12:18:46+00:00,2025-09-16T09:18:46.670940,TEST123,Cliente Teste,Kit Teste,,TEST001,Falta de Peça,0.75,"parafuso, peça","Oi, boa tarde! | Recebi meu pedido | Mas faltou uma peça importante | Não veio o parafuso principal",Novo,Sim,

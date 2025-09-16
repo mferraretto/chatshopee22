@@ -1,0 +1,34 @@
+[
+  {
+    "timestamp_utc": "2025-09-16T12:18:46+00:00",
+    "complaint_data": {
+      "type": "falta_peca",
+      "confidence": 0.75,
+      "messages": [
+        "Oi, boa tarde!",
+        "Recebi meu pedido",
+        "Mas faltou uma peça importante",
+        "Não veio o parafuso principal"
+      ],
+      "keywords_found": [
+        "parafuso",
+        "peça"
+      ],
+      "order_info": {
+        "orderId": "TEST123",
+        "buyer_name": "Cliente Teste",
+        "title": "Kit Teste",
+        "sku": "TEST001"
+      },
+      "detected_at": "2025-09-16T09:18:46.670940"
+    },
+    "order_data": {
+      "orderId": "TEST123",
+      "buyer_name": "Cliente Teste",
+      "title": "Kit Teste",
+      "sku": "TEST001"
+    },
+    "processing_status": "novo",
+    "flagged": true
+  }
+]
