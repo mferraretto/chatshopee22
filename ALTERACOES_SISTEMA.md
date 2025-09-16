@@ -92,8 +92,13 @@ O sistema agora **marca automaticamente** as conversas no Duoke:
    - `falta_peca` → **"FALTA DE PEÇA"**
    - `quebra` → **"QUEBRAS/DEFEITOS"** 
    - `outro` → **"OUTROS PROBLEMAS"**
-4. **✅ Confirma** → Clica no botão "Confirm"
-5. **💾 Salva dados** → Para controle e relatórios
+4. **✅ Confirma com múltiplas estratégias** → Garante que o Confirm seja clicado:
+   - 🎯 Seletores específicos para botão Confirm
+   - 👀 Verificação de visibilidade dos elementos
+   - 🔧 Fallback JavaScript para buscar por texto
+   - ⌨️ Tecla Enter como último recurso
+5. **🔍 Verifica aplicação** → Aguarda modal fechar e tag ser aplicada
+6. **💾 Salva dados** → Para controle e relatórios
 
 ## 📊 EXEMPLO DE DETECÇÃO
 
@@ -107,9 +112,45 @@ O sistema agora **marca automaticamente** as conversas no Duoke:
 ### Sistema detecta e executa:
 - 🏷️ **Tipo**: "Falta de Peça" 
 - 📊 **Confiança**: 0.85
-- 🎯 **Marcação visual**: Clica bandeirinha → Seleciona "FALTA DE PEÇA" → Confirm
+- 🎯 **Marcação visual**: Clica bandeirinha → Seleciona "FALTA DE PEÇA" → Confirm (garantido)
 - 🚨 **Status**: Conversa taggeada no Duoke automaticamente
 - 💾 **Dados**: Salvos para revisão e relatórios
+
+## 🔧 CORREÇÃO CRÍTICA: CONFIRMAÇÃO DE TAGS
+
+### ❌ **Problema Reportado:**
+Sistema abria tag, escolhia etiqueta, mas **NÃO clicava em Confirm**
+
+### ✅ **Solução Implementada:**
+#### **4 Estratégias de Confirmação:**
+1. **🎯 Seletores Específicos:**
+   - `button:has-text("Confirm")`
+   - `span:text("Confirm")`
+   - `button[class*="el-button--primary"]`
+   - `.el-dialog__footer button[class*="primary"]`
+
+2. **👀 Botões Visíveis por Posição:**
+   - `button:visible:last-child`
+   - `button[class*="primary"]:visible`
+
+3. **🔧 Fallback JavaScript:**
+   - Busca por texto "Confirm" em todos botões
+   - Clica programaticamente se encontrar
+
+4. **⌨️ Último Recurso:**
+   - Tecla Enter para confirmar
+   - ESC para fechar modal se falhar
+
+#### **⏱️ Timings Otimizados:**
+- **1500ms** → Aguarda modal carregar
+- **1200ms** → Aguarda confirmação aparecer  
+- **2000ms** → Aguarda tag ser aplicada
+- **1500ms** → Estabilização final
+
+#### **📊 Logs Detalhados:**
+- Mostra qual estratégia funcionou
+- Identifica problemas específicos
+- Confirma se modal fechou corretamente
 
 ## ⚠️ IMPORTANTE
 
