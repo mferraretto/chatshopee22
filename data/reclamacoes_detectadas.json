@@ -114,5 +114,105 @@
     "order_data": null,
     "processing_status": "novo",
     "flagged": true
+  },
+  {
+    "timestamp_utc": "2025-09-18T13:38:33+00:00",
+    "complaint_data": {
+      "type": "falta_peca",
+      "confidence": 0.5,
+      "messages": [
+        "Oi",
+        "Faltou uma peça no meu pedido"
+      ],
+      "keywords_found": [
+        "peça"
+      ],
+      "order_info": {
+        "orderId": "123",
+        "buyer_name": "João"
+      },
+      "detected_at": "2025-09-18T10:38:33.621095"
+    },
+    "order_data": {
+      "orderId": "123",
+      "buyer_name": "João"
+    },
+    "processing_status": "novo",
+    "flagged": true
+  },
+  {
+    "timestamp_utc": "2025-09-18T13:38:33+00:00",
+    "complaint_data": {
+      "type": "quebra",
+      "confidence": 0.5,
+      "messages": [
+        "O produto chegou quebrado",
+        "A base está rachada"
+      ],
+      "keywords_found": [
+        "quebrado"
+      ],
+      "order_info": {
+        "orderId": "456",
+        "buyer_name": "Maria"
+      },
+      "detected_at": "2025-09-18T10:38:33.796943"
+    },
+    "order_data": {
+      "orderId": "456",
+      "buyer_name": "Maria"
+    },
+    "processing_status": "novo",
+    "flagged": true
+  },
+  {
+    "timestamp_utc": "2025-09-18T13:39:19+00:00",
+    "complaint_data": {
+      "type": "falta_peca",
+      "confidence": 0.5,
+      "messages": [
+        "Oi",
+        "Faltou uma peça no meu pedido"
+      ],
+      "keywords_found": [
+        "peça"
+      ],
+      "order_info": {
+        "orderId": "123",
+        "buyer_name": "João"
+      },
+      "detected_at": "2025-09-18T10:39:19.498922"
+    },
+    "order_data": {
+      "orderId": "123",
+      "buyer_name": "João"
+    },
+    "processing_status": "novo",
+    "flagged": true
+  },
+  {
+    "timestamp_utc": "2025-09-18T13:39:19+00:00",
+    "complaint_data": {
+      "type": "quebra",
+      "confidence": 0.5,
+      "messages": [
+        "O produto chegou quebrado",
+        "A base está rachada"
+      ],
+      "keywords_found": [
+        "quebrado"
+      ],
+      "order_info": {
+        "orderId": "456",
+        "buyer_name": "Maria"
+      },
+      "detected_at": "2025-09-18T10:39:19.705347"
+    },
+    "order_data": {
+      "orderId": "456",
+      "buyer_name": "Maria"
+    },
+    "processing_status": "novo",
+    "flagged": true
   }
 ]

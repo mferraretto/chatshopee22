@@ -4,3 +4,7 @@ timestamp_utc,detected_at,order_id,buyer_name,produto,variacao,sku,complaint_typ
 2025-09-16T12:45:16+00:00,2025-09-16T09:45:16.576147,,,,,,Quebra/Defeito,0.75,"quebrado, rachado",Meu pedido chegou | Infelizmente veio quebrado | Está todo rachado,Novo,Sim,
 2025-09-16T12:45:44+00:00,2025-09-16T09:45:44.765126,,,,,,Falta de Peça,0.75,"parafuso, peça",Recebi o produto | Mas faltou uma peça | Não veio o parafuso principal,Novo,Sim,
 2025-09-16T12:45:45+00:00,2025-09-16T09:45:45.015657,,,,,,Quebra/Defeito,0.75,"quebrado, rachado",Meu pedido chegou | Infelizmente veio quebrado | Está todo rachado,Novo,Sim,
+2025-09-18T13:38:33+00:00,2025-09-18T10:38:33.621095,123,João,,,,,,,,,1,Falta de Peça,0.50,peça,Oi | Faltou uma peça no meu pedido,Novo,Sim,
+2025-09-18T13:38:33+00:00,2025-09-18T10:38:33.796943,456,Maria,,,,,,,,,1,Quebra/Defeito,0.50,quebrado,O produto chegou quebrado | A base está rachada,Novo,Sim,
+2025-09-18T13:39:19+00:00,2025-09-18T10:39:19.498922,123,João,,,,,,,,,1,Falta de Peça,0.50,peça,Oi | Faltou uma peça no meu pedido,Novo,Sim,
+2025-09-18T13:39:19+00:00,2025-09-18T10:39:19.705347,456,Maria,,,,,,,,,1,Quebra/Defeito,0.50,quebrado,O produto chegou quebrado | A base está rachada,Novo,Sim,
