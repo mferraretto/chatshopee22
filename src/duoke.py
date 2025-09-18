@@ -1471,8 +1471,10 @@ class DuokeBot:
                 if has_existing_tags:
                     print(f"[DEBUG] ⏭️ Conversa {i} JÁ POSSUI TAGS - PULANDO para próxima")
                     continue
+                else:
+                    print(f"[DEBUG] ✅ Conversa {i} sem tags existentes - prosseguindo com análise")
             except Exception as e:
-                print(f"[DEBUG] Erro ao verificar tags existentes: {e}")
+                print(f"[DEBUG] ⚠️ Erro ao verificar tags existentes (continuando): {e}")
 
             # ----- Mensagens + history (TODAS as mensagens para melhor entendimento) -----
             # Lê TODAS as mensagens da conversa para análise completa
@@ -1568,8 +1570,11 @@ class DuokeBot:
                 print(f"[DEBUG] 🔍 Análise: {analysis_result}")
                 
                 # ✅ SE NÃO HÁ RECLAMAÇÃO: PULA RAPIDAMENTE PARA PRÓXIMA CONVERSA
-                if not flagged and not any(keyword in analysis_result.lower() for keyword in ['reclamação', 'marcado']):
-                    print("[DEBUG] ⚡ Conversa normal - PULANDO para próxima (sem problemas detectados)")
+                # CORREÇÃO: Verifica se há "MARCADO:" na análise (indica reclamação detectada)
+                has_complaint = 'marcado:' in analysis_result.lower() or any(keyword in analysis_result.lower() for keyword in ['reclamação detectada', 'tipo principal:'])
+                
+                if not has_complaint:
+                    print(f"[DEBUG] ⚡ Conversa normal - PULANDO para próxima (análise='{analysis_result[:100]}...')")
                     continue
                 
                 # 🚨 SE HÁ RECLAMAÇÃO DETECTADA: Processa marcação e registro
@@ -1598,6 +1603,8 @@ class DuokeBot:
                     
                     # Marca a conversa com a tag visual apropriada
                     print(f"[DEBUG] 🎯 Iniciando marcação visual para tipo: {complaint_type}")
+                    print(f"[DEBUG] 📋 Contexto da reclamação: {analysis_result[:200]}...")
+                    
                     tag_success = await self.mark_conversation_with_tag(page, complaint_type)
                     
                     if tag_success:
@@ -1607,6 +1614,7 @@ class DuokeBot:
                         await page.wait_for_timeout(2500)  # Tempo aumentado para garantir estabilização
                     else:
                         print(f"[DEBUG] ❌ ⚠️ FALHA ao marcar conversa visualmente com tag '{complaint_type}' - continuando sem marcação")
+                        print(f"[DEBUG] ❌ Detalhes da falha: tipo={complaint_type}, análise={analysis_result[:100]}...")
                         
                 except Exception as e:
                     print(f"[DEBUG] ❌ Erro ao marcar visualmente: {e}")

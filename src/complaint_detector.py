@@ -99,16 +99,66 @@ class ComplaintDetector:
             r"\b(?:não mandaram|nao mandaram|não enviaram|nao enviaram)\b.*\b(?:tudo|completo|todas as peças|todas as pecas)\b"
         ]
         
-        # Padrões para quebras/defeitos
+        # Padrões para quebras/defeitos - LISTA COMPLETA FORNECIDA PELO USUÁRIO
         self.broken_patterns = [
-            r"\b(?:quebrado|quebrada|quebrou|quebrar|rachado|rachada|rachou)\b",
+            # Quebras básicas
+            r"\bquebrado\b", r"\bquebrada\b", r"\bquebrou\b", 
+            r"\bveio quebrado\b", r"\btodo quebrado\b", r"\bpartido\b", 
+            r"\bestourado\b", r"\bcom trinca\b", r"\bcom rachadura\b",
+            r"\bdanificado\b", r"\bavariado\b", 
+            r"\bdanificou no transporte\b", r"\bquebrou na entrega\b",
+            r"\bquebrou na base\b", r"\bquebrou no canto\b", r"\bquebrou o encaixe\b",
+            
+            # Variações sem acento/abreviações  
+            r"\besta quebrado\b", r"\btá quebrado\b", r"\bta quebrado\b",
+            
+            # "chegou solto"
+            r"\bchegou solto\b", r"\bsolto\b", r"\bveio solto\b", 
+            r"\bpeça solta\b", r"\bbambo\b", r"\bbamba\b", r"\bfrouxo\b",
+            r"\bdesencaixado\b", r"\bdesparafusado\b", r"\bcom folga\b",
+            r"\bencaixe frouxo\b", r"\bparafuso solto\b", r"\bcola soltou\b",
+            r"\bdescolou\b", r"\bcaiu do encaixe\b",
+            
+            # Modelo por partes: [PARTE] tá/está/veio [DANO]
+            # Partes comuns
+            r"\b(?:fundo|base|tampa|lateral|canto|borda|pé|suporte|haste|pino|parafuso|dobradiça|trilho|encaixe|topo|meio|coluna|arco|cilindro|painel)\b.*\b(?:quebrado|rachado|trincado|lascado|amassado|riscado|arranhado|descolado|solto|empenado|torto|desalinhado)\b",
+            r"\b(?:quebrado|rachado|trincado|lascado|amassado|riscado|arranhado|descolado|solto|empenado|torto|desalinhado)\b.*\b(?:fundo|base|tampa|lateral|canto|borda|pé|suporte|haste|pino|parafuso|dobradiça|trilho|encaixe|topo|meio|coluna|arco|cilindro|painel)\b",
+            
+            # Exemplos específicos
+            r"\bfundo tá quebrado\b", r"\bbase veio trincada\b", r"\bcanto amassado\b",
+            r"\bencaixe solto\b", r"\bpé torto\b",
+            
+            # "tá com defeito"
+            r"\bcom defeito\b", r"\bdefeituoso\b", r"\bdefeituosa\b",
+            r"\bnão funciona\b", r"\bnão liga\b", r"\bnão fecha\b", r"\bnão abre\b",
+            r"\bemperra\b", r"\btravando\b", r"\bnão encaixa\b", r"\bnão para em pé\b",
+            r"\btorto\b", r"\bempenado\b", r"\bfora de prumo\b", r"\bdesalinhado\b",
+            r"\bta com defeito\b", r"\besta com defeito\b",
+            
+            # "está rachado"
+            r"\brachado\b", r"\brachada\b", r"\brachou\b", 
+            r"\btrincado\b", r"\btrincada\b", r"\btrincou\b",
+            r"\bfissurado\b", r"\bfissura\b", r"\bcom trinca\b", r"\bcom rachadura\b",
+            r"\babriu uma trinca\b", r"\besta rachado\b", r"\bta rachado\b",
+            
+            # Extras úteis (dano/estética/embalagem)
+            r"\bamassado\b", r"\bamassou\b", r"\besmagado\b", r"\briscado\b",
+            r"\barranhado\b", r"\blascado\b", r"\bdescascando\b", r"\bpintura falhada\b",
+            r"\bmanchado\b", r"\bsujo\b", r"\bmolhado\b", r"\bmofado\b",
+            r"\bembalagem amassada\b", r"\bcaixa amassada\b", 
+            r"\bchegou avariado\b", r"\bchegou danificado\b",
+            
+            # Erros de digitação comuns
+            r"\bquebrda\b", r"\brachdo\b", r"\btricando\b", r"\bsouto\b", r"\bsoltoo\b",
+            r"\bdefeio\b", r"\bdefeitoo\b", r"\bempeno\b", r"\bempenada\b",
+            
+            # Padrões originais mantidos para compatibilidade
             r"\b(?:defeituoso|defeituosa|com defeito|defeito)\b",
             r"\b(?:danificado|danificada|danificar|avariado|avariada)\b",
             r"\b(?:não funciona|nao funciona|não está funcionando|nao esta funcionando)\b",
             r"\b(?:parou de funcionar|deixou de funcionar)\b",
             r"\b(?:ruim|péssimo|pessimo|horrível|horrivel)\b.*\b(?:qualidade|material)\b",
-            r"\b(?:veio|chegou)\b.*\b(?:quebrado|quebrada|defeituoso|defeituosa|danificado|danificada)\b",
-            r"\b(?:trincado|trincada|riscado|riscada|amassado|amassada)\b"
+            r"\b(?:veio|chegou)\b.*\b(?:quebrado|quebrada|defeituoso|defeituosa|danificado|danificada)\b"
         ]
         
         # Palavras-chave adicionais para contexto
@@ -120,20 +170,34 @@ class ComplaintDetector:
     
     def detect_missing_parts(self, messages: List[str]) -> bool:
         """Detecta se há reclamação de falta de peças"""
-        combined_text = ' '.join(messages[-5:]).lower()  # últimas 5 mensagens
+        if not messages:
+            return False
+            
+        combined_text = ' '.join(messages[-10:]).lower()  # Aumentado para últimas 10 mensagens
+        print(f"[DEBUG] 🔍 Verificando falta de peças em: '{combined_text[:200]}...'")
         
-        for pattern in self.missing_parts_patterns:
+        for i, pattern in enumerate(self.missing_parts_patterns):
             if re.search(pattern, combined_text, re.IGNORECASE):
+                print(f"[DEBUG] ✅ FALTA DE PEÇA DETECTADA! Padrão {i+1}: {pattern}")
                 return True
+        
+        print("[DEBUG] ❌ Nenhuma falta de peça detectada")
         return False
     
     def detect_breakage(self, messages: List[str]) -> bool:
         """Detecta se há reclamação de quebra/defeito"""
-        combined_text = ' '.join(messages[-5:]).lower()  # últimas 5 mensagens
+        if not messages:
+            return False
+            
+        combined_text = ' '.join(messages[-10:]).lower()  # Aumentado para últimas 10 mensagens
+        print(f"[DEBUG] 🔍 Verificando quebras/defeitos em: '{combined_text[:200]}...'")
         
-        for pattern in self.broken_patterns:
+        for i, pattern in enumerate(self.broken_patterns):
             if re.search(pattern, combined_text, re.IGNORECASE):
+                print(f"[DEBUG] ✅ QUEBRA/DEFEITO DETECTADO! Padrão {i+1}: {pattern}")
                 return True
+        
+        print("[DEBUG] ❌ Nenhuma quebra/defeito detectado")
         return False
     
     def get_found_keywords(self, messages: List[str], complaint_type: str) -> List[str]:
@@ -150,7 +214,7 @@ class ComplaintDetector:
     
     def calculate_confidence(self, messages: List[str], complaint_type: str) -> float:
         """Calcula a confiança na detecção da reclamação"""
-        combined_text = ' '.join(messages[-5:]).lower()
+        combined_text = ' '.join(messages[-10:]).lower()  # Mais mensagens para análise
         confidence = 0.0
         
         # Padrões aplicáveis
@@ -160,30 +224,45 @@ class ComplaintDetector:
         elif complaint_type == 'quebra':
             patterns = self.broken_patterns
         
+        print(f"[DEBUG] 📊 Calculando confiança para '{complaint_type}' com {len(patterns)} padrões")
+        
         # Conta quantos padrões foram encontrados
         matches = 0
+        matched_patterns = []
         for pattern in patterns:
             if re.search(pattern, combined_text, re.IGNORECASE):
                 matches += 1
+                matched_patterns.append(pattern)
         
-        # Confidence baseada na proporção de padrões encontrados
+        print(f"[DEBUG] 📊 Padrões encontrados: {matches}/{len(patterns)}")
+        
+        # Confidence baseada na proporção de padrões encontrados (mais generoso)
         if matches > 0:
-            confidence = min(1.0, matches / len(patterns) * 3)  # amplifica um pouco
+            # Confiança mínima de 0.5 se encontrou pelo menos um padrão
+            confidence = max(0.5, min(1.0, matches / len(patterns) * 5))  # Mais generoso
         
         # Bonus se há palavras de urgência
         urgency_words = self.context_keywords.get('urgencia', [])
+        urgency_found = 0
         for word in urgency_words:
             if word in combined_text:
                 confidence += 0.1
+                urgency_found += 1
         
-        return min(1.0, confidence)
+        final_confidence = min(1.0, confidence)
+        print(f"[DEBUG] 📊 Confiança final: {final_confidence:.2f} (matches={matches}, urgência={urgency_found})")
+        
+        return final_confidence
     
     def analyze_messages(self, messages: List[str], order_info: Dict[str, Any] = None) -> List[ComplaintInfo]:
         """Analisa mensagens e retorna lista de reclamações detectadas"""
         complaints = []
         
         if not messages:
+            print("[DEBUG] ❌ Nenhuma mensagem para analisar")
             return complaints
+        
+        print(f"[DEBUG] 🔍 Analisando {len(messages)} mensagens para reclamações...")
         
         # Detecta falta de peças
         if self.detect_missing_parts(messages):
@@ -193,11 +272,12 @@ class ComplaintDetector:
             complaint = ComplaintInfo(
                 type='falta_peca',
                 confidence=confidence,
-                messages=messages[-5:],  # últimas 5 mensagens relevantes
+                messages=messages[-10:],  # Mais mensagens para contexto
                 keywords_found=keywords,
                 order_info=order_info
             )
             complaints.append(complaint)
+            print(f"[DEBUG] ✅ Reclamação FALTA DE PEÇA adicionada (confiança: {confidence:.2f})")
         
         # Detecta quebras/defeitos
         if self.detect_breakage(messages):
@@ -207,12 +287,14 @@ class ComplaintDetector:
             complaint = ComplaintInfo(
                 type='quebra',
                 confidence=confidence,
-                messages=messages[-5:],  # últimas 5 mensagens relevantes
+                messages=messages[-10:],  # Mais mensagens para contexto
                 keywords_found=keywords,
                 order_info=order_info
             )
             complaints.append(complaint)
+            print(f"[DEBUG] ✅ Reclamação QUEBRA/DEFEITO adicionada (confiança: {confidence:.2f})")
         
+        print(f"[DEBUG] 📊 Total de reclamações detectadas: {len(complaints)}")
         return complaints
     
     def should_flag_conversation(self, messages: List[str], min_confidence: float = 0.3) -> bool:
@@ -241,18 +323,24 @@ class ComplaintDetector:
     def is_normal_conversation(self, messages: List[str]) -> bool:
         """Verifica se é uma conversa normal (sem problemas específicos)
         
-        Detecta padrões de conversas normais que devem ser puladas:
-        - Perguntas sobre entrega/prazo
-        - Agradecimentos 
-        - Dúvidas sobre produto
-        - Elogios
+        IMPORTANTE: Primeiro verifica se há problemas específicos.
+        Se houver, NÃO classifica como normal mesmo que tenha padrões normais.
         """
         if not messages:
             return True
             
-        combined_text = ' '.join(messages[-5:]).lower()
+        combined_text = ' '.join(messages[-10:]).lower()  # Mais mensagens para análise
+        print(f"[DEBUG] 🔍 Verificando se é conversa normal: '{combined_text[:150]}...'")
         
-        # Padrões de conversas normais (sem problemas)
+        # PRIMEIRO: Verifica se há problemas específicos (prioridade alta)
+        has_missing_parts = self.detect_missing_parts(messages)
+        has_breakage = self.detect_breakage(messages)
+        
+        if has_missing_parts or has_breakage:
+            print(f"[DEBUG] 🚨 NÃO É NORMAL - Problemas detectados: falta_peca={has_missing_parts}, quebra={has_breakage}")
+            return False
+        
+        # SEGUNDO: Se não há problemas, verifica padrões normais
         normal_patterns = [
             r'\b(quando|como|onde)\b.*\b(chega|chegará|vai chegar|entrega)\b',
             r'\b(obrigad[oa]|agradec)\b',
@@ -265,8 +353,10 @@ class ComplaintDetector:
         
         for pattern in normal_patterns:
             if re.search(pattern, combined_text, re.IGNORECASE):
+                print(f"[DEBUG] ✅ Conversa normal detectada - padrão: {pattern}")
                 return True
                 
+        print("[DEBUG] ❓ Conversa não classificada como normal - prosseguindo com análise")        
         return False
 
 

@@ -55,10 +55,13 @@ class ComplaintClassifier:
         if not complaints:
             return False, f"✅ Sem problemas específicos detectados (processadas {self.processed_conversations} conversas)"
         
-        # Filtra apenas reclamações com confiança mínima
-        significant_complaints = [c for c in complaints if c.confidence >= 0.3]
+        # Filtra apenas reclamações com confiança mínima (reduzida para capturar mais casos)
+        significant_complaints = [c for c in complaints if c.confidence >= 0.1]  # Reduzido de 0.3 para 0.1
         
         if not significant_complaints:
+            print(f"[DEBUG] ❌ Reclamações com baixa confiança ignoradas. Total encontradas: {len(complaints)}")
+            for complaint in complaints:
+                print(f"[DEBUG]   - {complaint.type}: confiança {complaint.confidence:.2f}")
             return False, f"Reclamações com baixa confiança ignoradas"
         
         # Salva as reclamações detectadas
