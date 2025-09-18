@@ -977,22 +977,22 @@ class DuokeBot:
             # 4. CLICA EM "CONFIRM" PARA APLICAR A TAG
             print("[DEBUG] 🎯 Procurando botão Confirm...")
             
-                # Estratégias múltiplas para encontrar o botão Confirm
-                confirm_strategies = [
-                    # Estratégia 1: Seletores específicos baseados no elemento real
-                    {
-                        'name': 'Seletores específicos do Duoke',
-                        'selectors': [
-                            'button[data-v-c0d8ee92][class*="el-button--primary"] span:text("Confirm")',
-                            'button[data-v-c0d8ee92][class*="el-button--primary"]',
-                            'button[fdprocessedid][class*="el-button--primary"] span:text("Confirm")',
-                            'button[fdprocessedid][class*="el-button--primary"]',
-                            'button[class*="el-button--primary"] span:text("Confirm")',
-                            'button[class*="el-button--primary"]:has-text("Confirm")',
-                            'button:has-text("Confirm")',
-                            'span:text("Confirm")'
-                        ]
-                    },
+            # Estratégias múltiplas para encontrar o botão Confirm
+            confirm_strategies = [
+                # Estratégia 1: Seletores específicos baseados no elemento real
+                {
+                    'name': 'Seletores específicos do Duoke',
+                    'selectors': [
+                        'button[data-v-c0d8ee92][class*="el-button--primary"] span:text("Confirm")',
+                        'button[data-v-c0d8ee92][class*="el-button--primary"]',
+                        'button[fdprocessedid][class*="el-button--primary"] span:text("Confirm")',
+                        'button[fdprocessedid][class*="el-button--primary"]',
+                        'button[class*="el-button--primary"] span:text("Confirm")',
+                        'button[class*="el-button--primary"]:has-text("Confirm")',
+                        'button:has-text("Confirm")',
+                        'span:text("Confirm")'
+                    ]
+                },
                 # Estratégia 2: Por posição (último botão visível)
                 {
                     'name': 'Botão primário visível',
