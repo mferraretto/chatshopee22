@@ -1446,16 +1446,23 @@ class DuokeBot:
             order_info = {}
             try:
                 order_info = await extract_order_details_with_selectors(page, SEL)
+                print(f"[DEBUG] ✅ Order info extraído com seletores: {len(order_info)} campos")
             except Exception as e:
                 print(f"[DEBUG] falha ao extrair detalhes do pedido com seletores: {e}")
                 try:
                     order_info = await extract_order_from_dom(page, SEL)
+                    print(f"[DEBUG] ✅ Order info extraído via DOM: {len(order_info)} campos")
                 except Exception as e_dom:
-                    print(
-                        f"[DEBUG] falha total na extração de dados do pedido: {e_dom}"
-                    )
+                    print(f"[DEBUG] falha total na extração de dados do pedido: {e_dom}")
+                    # Garante que order_info tenha pelo menos campos básicos
+                    order_info = {
+                        "orderId": "N/A",
+                        "buyer_name": "N/A", 
+                        "title": "N/A",
+                        "status": "N/A"
+                    }
 
-            print("[DEBUG] Order info:", order_info)
+            print(f"[DEBUG] Order info final: {order_info}")
 
             # ----- VERIFICAÇÃO DE TAGS EXISTENTES -----
             # Se a conversa já tem tags, pula para próxima
@@ -1543,6 +1550,14 @@ class DuokeBot:
                     print(f"[DEBUG] falha ao registrar pedido: {e}")
                 print("[DEBUG] conversa registrada (pendência manual)")
                 continue
+
+            # ----- CHAMA O HOOK DA UI PARA MOSTRAR DADOS NO PAINEL -----
+            try:
+                # Chama o hook da UI para mostrar informações da conversa no painel
+                await decide_reply_fn(pairs, buyer_only, order_info)
+                print(f"[DEBUG] 📊 Dados enviados para UI: pedido={order_info.get('orderId', 'N/A')}, comprador={order_info.get('buyer_name', 'N/A')}")
+            except Exception as e:
+                print(f"[DEBUG] Erro ao enviar dados para UI: {e}")
 
             # ----- ANÁLISE RÁPIDA: detecta se há reclamações específicas -----
             flagged = False
