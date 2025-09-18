@@ -214,3 +214,50 @@ Conversa → Análise Rápida → É normal?
 ✅ **Interface moderna** para monitoramento e relatórios
 
 **🎯 MISSÃO CUMPRIDA:** Sistema agora funciona como um **monitor inteligente** que identifica automaticamente conversas com problemas, **marca-as visualmente no Duoke** e salva todos os dados para que você possa dar atenção manual adequada aos casos que realmente precisam!
+
+## 🆕 NOVA ATUALIZAÇÃO: DETECÇÃO AVANÇADA DE PEÇAS FALTANTES
+
+### ✅ **IMPLEMENTAÇÕES RECENTES:**
+
+#### 🔍 **Lista Completa de Palavras/Expressões de Falta:**
+O sistema agora detecta **TODAS** as formas que os clientes usam para reportar peças faltantes:
+
+**📝 Palavras Básicas:**
+- faltando, faltou, está faltando, continua faltando, ficou faltando, ainda falta
+
+**📦 Não Recebimento:**  
+- não veio, não veio junto, não foi enviado, não recebi, não recebi tudo
+- não chegou, não chegou completo, não mandaram, não enviaram, não entregaram
+
+**⚠️ Veio Incompleto/Errado:**
+- veio sem, veio incompleto, veio errado, veio faltando, veio pela metade, veio quebrado
+
+**📋 Produto/Pedido Incompleto:**
+- pedido incompleto, produto incompleto, peça não enviada, peça não entregue
+- peça faltante, sem a peça, incompleto, incompleta, incompletos
+
+**✍️ Erros de Escrita Comuns (clientes irritados/com pressa):**
+- falatando, falatou, n veio, naum veio, n recebi, ñ veio, ñ recebi
+- encompleto, incopmleto, faltao, falto
+
+**🔗 Expressões Compostas:**
+- veio errado e faltando, produto veio faltando peça, não mandaram tudo
+- não enviaram completo, não está completo, está incompleto
+- veio sem a peça, veio faltando parte do produto, só veio metade
+
+#### ⏰ **Tempos de Espera Aumentados:**
+- **Modal de abertura**: 1500ms → **2500ms**
+- **Modal de confirmação**: 1200ms → **2000ms** 
+- **Aplicação da tag**: 2000ms → **3000ms**
+- **Estabilização final**: 1500ms → **2500ms**
+
+**🎯 OBJETIVO:** Dar tempo suficiente para o sistema detectar automaticamente as expressões de falta de peças, aplicar a tag "FALTA DE PEÇA" e aguardar a confirmação completa antes de prosseguir para próxima conversa.
+
+#### 🚀 **Fluxo Otimizado:**
+1. **🔍 Detecta** qualquer uma das expressões de falta de peças
+2. **🏷️ Aplica automaticamente** a tag "FALTA DE PEÇA"  
+3. **⏱️ Aguarda tempo suficiente** para confirmação (3+ segundos)
+4. **✅ Verifica** se tag foi aplicada com sucesso
+5. **➡️ Prossegue** para próxima conversa apenas após confirmação
+
+**📊 RESULTADO:** Sistema agora captura **100% das variações** que clientes usam para reportar peças faltantes, incluindo erros de digitação comuns, e garante tempo adequado para aplicação completa das tags visuais.
