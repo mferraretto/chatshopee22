@@ -418,3 +418,51 @@ O sistema agora detecta **TODAS** as formas que os clientes usam para reportar p
 - **Funciona com interface atual** do Duoke
 - **Adapta-se automaticamente** a mudanças de layout
 - **Mantém funcionalidades existentes** intactas
+
+## 🔧 CORREÇÃO CRÍTICA: PAINEL DE CONVERSAS
+
+### ❌ **Problema Identificado:**
+- Interface não mostrava informações das conversas no painel lateral
+- Dados do pedido, comprador e análise não apareciam na UI
+
+### ✅ **Correções Implementadas:**
+
+#### 🔗 **Conexão UI-Backend Corrigida:**
+- **Hook da UI** agora é chamado corretamente no ciclo principal
+- **Dados da conversa** enviados via WebSocket para interface
+- **Order info** extraído com fallback robusto para campos básicos
+
+#### 📊 **Melhorias na Extração de Dados:**
+- **Logs detalhados** para debug da extração
+- **Fallback robusto** quando seletores falham
+- **Campos básicos garantidos** mesmo em caso de erro:
+  - `orderId`, `buyer_name`, `title`, `status`
+
+#### 🔍 **Debug Aprimorado:**
+- **Logs específicos** para envio de dados para UI
+- **Contagem de campos** extraídos
+- **Status de sucesso/falha** para cada operação
+
+#### 🚀 **Fluxo Corrigido:**
+```
+1. 🔍 Abre conversa
+2. 📊 Extrai order_info (com fallback)
+3. 📡 Envia dados para UI via hook
+4. 🏷️ Verifica tags existentes
+5. 📜 Carrega mensagens completas
+6. 🤖 Analisa com contexto total
+7. 🚨 Processa reclamações (se houver)
+```
+
+### 📱 **Resultado na Interface:**
+
+**Agora funcionando corretamente:**
+- ✅ **Número do pedido** aparece no painel
+- ✅ **Nome do comprador** exibido
+- ✅ **Status do pedido** mostrado
+- ✅ **Produto** sendo analisado visível
+- ✅ **Mensagens da conversa** em tempo real
+- ✅ **Análise automática** com resultados detalhados
+- ✅ **Contador de conversas** funcionando
+
+**🎯 PROBLEMA RESOLVIDO:** O painel agora mostra todas as informações das conversas em tempo real conforme o sistema processa cada uma!
