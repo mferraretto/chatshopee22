@@ -607,23 +607,40 @@ class DuokeBot:
 
     # ---------- leitura de mensagens ----------
 
-    async def read_messages_with_roles(self, page, depth: int) -> list[tuple[str, str]]:
-        """Retorna últimos N [(role,text)], role ∈ {'buyer','seller'}."""
+    async def read_messages_with_roles(self, page, depth: int = None) -> list[tuple[str, str]]:
+        """Retorna mensagens [(role,text)], role ∈ {'buyer','seller'}.
+        
+        Se depth for None, lê TODAS as mensagens da conversa.
+        Se depth for especificado, retorna apenas os últimos N.
+        """
         out: list[tuple[str, str]] = []
         try:
             items = page.locator("ul.message_main > li")
 
-            # Força mais histórico: rola ao topo algumas vezes
+            # Força carregar MAIS histórico: rola ao topo várias vezes para garantir que todas as mensagens sejam carregadas
             try:
                 container = page.locator(
                     SEL.get("message_container", "ul.message_main")
                 ).first
-                for _ in range(3):
+                
+                print("[DEBUG] 📜 Carregando histórico completo da conversa...")
+                
+                # Rola ao topo várias vezes para forçar carregamento de todas as mensagens
+                for i in range(8):  # Aumentado de 3 para 8 tentativas
                     await container.evaluate("(el) => { el.scrollTop = 0; }")
-                    await page.wait_for_timeout(120)
-            except Exception:
-                pass
+                    await page.wait_for_timeout(200)  # Tempo maior para carregar
+                    
+                    # Verifica se há mais mensagens sendo carregadas
+                    current_count = await items.count()
+                    if i > 0 and current_count == previous_count:
+                        print(f"[DEBUG] 📜 Carregamento completo - {current_count} mensagens encontradas")
+                        break
+                    previous_count = current_count
+                    
+            except Exception as e:
+                print(f"[DEBUG] Aviso ao carregar histórico: {e}")
 
+            # Extrai TODAS as mensagens
             texts = await items.evaluate_all(
                 """
                 (els) => els
@@ -643,9 +660,18 @@ class DuokeBot:
                     .filter(Boolean)
             """
             )
-            out = texts[-depth:]
-        except Exception:
-            pass
+            
+            # Se depth foi especificado, retorna apenas os últimos N
+            # Senão, retorna TODAS as mensagens
+            if depth is not None:
+                out = texts[-depth:]
+                print(f"[DEBUG] 📜 Retornando últimas {len(out)} de {len(texts)} mensagens (depth={depth})")
+            else:
+                out = texts
+                print(f"[DEBUG] 📜 Retornando TODAS as {len(out)} mensagens da conversa")
+                
+        except Exception as e:
+            print(f"[DEBUG] Erro ao ler mensagens: {e}")
         return out
 
     async def read_messages(self, page, depth: int = 8) -> list[str]:
@@ -766,6 +792,85 @@ class DuokeBot:
 
     # ---------- sistema de tags ----------
 
+    async def check_existing_tags(self, page) -> bool:
+        """Verifica se a conversa já possui tags aplicadas"""
+        try:
+            print("[DEBUG] 🔍 Verificando se conversa já possui tags...")
+            
+            # Seletores para detectar tags existentes
+            tag_selectors = [
+                # Tags visuais no header da conversa
+                '.cont_header .el-tag',
+                '.chat_header .el-tag', 
+                '.contact_header .el-tag',
+                # Tags em elementos de marcação
+                '[class*="tag"]:visible',
+                '[class*="label"]:visible',
+                # Ícones de bandeirinha já preenchidos/coloridos
+                'i[class*="icon_mark"]:not([class*="icon_mark_1"])',
+                'i[class*="flag"]:visible',
+                # Elementos que indicam marcação prévia
+                '[class*="marked"]',
+                '[class*="flagged"]',
+                '[class*="tagged"]'
+            ]
+            
+            for selector in tag_selectors:
+                try:
+                    elements = page.locator(selector)
+                    count = await elements.count()
+                    
+                    if count > 0:
+                        # Verifica se o elemento contém texto de tag conhecida
+                        for i in range(min(count, 5)):  # Verifica até 5 elementos
+                            try:
+                                text = await elements.nth(i).inner_text()
+                                text_lower = text.lower().strip()
+                                
+                                # Lista de tags conhecidas que indicam conversa já processada
+                                known_tags = [
+                                    'falta de peça', 'falta de peca', 'falta peça', 'falta peca',
+                                    'quebras/defeitos', 'quebras defeitos', 'quebra', 'defeito',
+                                    'outros problemas', 'problema', 'reclamação', 'reclamacao',
+                                    'processado', 'revisado', 'analisado', 'marcado'
+                                ]
+                                
+                                for known_tag in known_tags:
+                                    if known_tag in text_lower:
+                                        print(f"[DEBUG] ✅ Tag existente encontrada: '{text}' (seletor: {selector})")
+                                        return True
+                                        
+                            except Exception:
+                                continue
+                                
+                except Exception as e:
+                    print(f"[DEBUG] Erro ao verificar seletor {selector}: {e}")
+                    continue
+            
+            # Verifica também se há indicadores visuais de marcação
+            try:
+                # Procura por ícones de bandeirinha coloridos ou preenchidos
+                filled_flags = page.locator('i[class*="icon_mark"]:not([class*="icon_mark_1"])')
+                if await filled_flags.count() > 0:
+                    print("[DEBUG] ✅ Ícone de bandeirinha preenchido encontrado - conversa já marcada")
+                    return True
+                    
+                # Procura por elementos com cores que indicam marcação
+                colored_elements = page.locator('[style*="color"]:visible, [class*="active"]:visible')
+                colored_count = await colored_elements.count()
+                if colored_count > 3:  # Se há muitos elementos coloridos, pode indicar marcação
+                    print(f"[DEBUG] ⚠️ Muitos elementos coloridos encontrados ({colored_count}) - possível marcação prévia")
+                    
+            except Exception as e:
+                print(f"[DEBUG] Erro ao verificar indicadores visuais: {e}")
+            
+            print("[DEBUG] ❌ Nenhuma tag existente encontrada - conversa não marcada")
+            return False
+            
+        except Exception as e:
+            print(f"[DEBUG] ❌ Erro geral ao verificar tags existentes: {e}")
+            return False
+
     async def mark_conversation_with_tag(self, page, complaint_type: str) -> bool:
         """Marca a conversa com uma tag visual baseada no tipo de reclamação detectada"""
         try:
@@ -797,8 +902,8 @@ class DuokeBot:
                 print("[DEBUG] ❌ Não foi possível clicar no ícone de tag")
                 return False
             
-            # Aguarda o modal abrir
-            await page.wait_for_timeout(1500)
+            # Aguarda o modal abrir - tempo aumentado para permitir confirmação manual
+            await page.wait_for_timeout(2500)
             
             # 2. MAPEIA TIPOS PARA ETIQUETAS DISPONÍVEIS
             tag_mapping = {
@@ -867,27 +972,27 @@ class DuokeBot:
                 return False
             
             print("[DEBUG] ⏱️ Aguardando modal de confirmação aparecer...")
-            await page.wait_for_timeout(1200)  # Mais tempo para modal renderizar
+            await page.wait_for_timeout(2000)  # Tempo aumentado para permitir confirmação manual
             
             # 4. CLICA EM "CONFIRM" PARA APLICAR A TAG
             print("[DEBUG] 🎯 Procurando botão Confirm...")
             
-            # Estratégias múltiplas para encontrar o botão Confirm
-            confirm_strategies = [
-                # Estratégia 1: Seletores específicos baseados no elemento real
-                {
-                    'name': 'Seletores específicos do Duoke',
-                    'selectors': [
-                        'button[data-v-c0d8ee92][class*="el-button--primary"] span:text("Confirm")',
-                        'button[data-v-c0d8ee92][class*="el-button--primary"]',
-                        'button[fdprocessedid][class*="el-button--primary"] span:text("Confirm")',
-                        'button[fdprocessedid][class*="el-button--primary"]',
-                        'button[class*="el-button--primary"] span:text("Confirm")',
-                        'button[class*="el-button--primary"]:has-text("Confirm")',
-                        'button:has-text("Confirm")',
-                        'span:text("Confirm")'
-                    ]
-                },
+                # Estratégias múltiplas para encontrar o botão Confirm
+                confirm_strategies = [
+                    # Estratégia 1: Seletores específicos baseados no elemento real
+                    {
+                        'name': 'Seletores específicos do Duoke',
+                        'selectors': [
+                            'button[data-v-c0d8ee92][class*="el-button--primary"] span:text("Confirm")',
+                            'button[data-v-c0d8ee92][class*="el-button--primary"]',
+                            'button[fdprocessedid][class*="el-button--primary"] span:text("Confirm")',
+                            'button[fdprocessedid][class*="el-button--primary"]',
+                            'button[class*="el-button--primary"] span:text("Confirm")',
+                            'button[class*="el-button--primary"]:has-text("Confirm")',
+                            'button:has-text("Confirm")',
+                            'span:text("Confirm")'
+                        ]
+                    },
                 # Estratégia 2: Por posição (último botão visível)
                 {
                     'name': 'Botão primário visível',
@@ -1028,9 +1133,9 @@ class DuokeBot:
                     pass
                 return False
             
-            # Aguarda o modal fechar e a tag ser aplicada
+            # Aguarda o modal fechar e a tag ser aplicada - tempo aumentado
             print("[DEBUG] ⏱️ Aguardando modal fechar e tag ser aplicada...")
-            await page.wait_for_timeout(2000)  # Mais tempo para garantir que a tag seja aplicada
+            await page.wait_for_timeout(3000)  # Tempo significativamente aumentado para garantir confirmação
             
             # Verifica se o modal realmente fechou
             try:
@@ -1352,15 +1457,25 @@ class DuokeBot:
 
             print("[DEBUG] Order info:", order_info)
 
-            # ----- Mensagens + history (últimas 20 conforme solicitado) -----
-            depth = 20  # Fixo em 20 mensagens conforme requisito
-            pairs = await self.read_messages_with_roles(page, depth)
-            print(f"[DEBUG] conversa {i}: {len(pairs)} msgs (com role)")
+            # ----- VERIFICAÇÃO DE TAGS EXISTENTES -----
+            # Se a conversa já tem tags, pula para próxima
+            try:
+                has_existing_tags = await self.check_existing_tags(page)
+                if has_existing_tags:
+                    print(f"[DEBUG] ⏭️ Conversa {i} JÁ POSSUI TAGS - PULANDO para próxima")
+                    continue
+            except Exception as e:
+                print(f"[DEBUG] Erro ao verificar tags existentes: {e}")
+
+            # ----- Mensagens + history (TODAS as mensagens para melhor entendimento) -----
+            # Lê TODAS as mensagens da conversa para análise completa
+            pairs = await self.read_messages_with_roles(page, depth=None)  # depth=None = todas as mensagens
+            print(f"[DEBUG] conversa {i}: {len(pairs)} msgs TOTAIS (com role)")
             if not pairs:
                 continue
 
             buyer_name = (order_info.get("buyer_name") or "").strip()
-            buyer_only = [t for r, t in pairs if r == "buyer"][-20:]  # Últimas 20 mensagens do comprador
+            buyer_only = [t for r, t in pairs if r == "buyer"]  # TODAS as mensagens do comprador para melhor análise
             problema = infer_problema(buyer_only)
             etiqueta = determine_label(problema)
             order_info["etiqueta"] = etiqueta
@@ -1474,7 +1589,7 @@ class DuokeBot:
                         print(f"[DEBUG] 🎉 ✅ Conversa marcada visualmente com tag '{complaint_type}' COM SUCESSO!")
                         # Aguarda mais um tempo para garantir que a tag foi aplicada completamente
                         print("[DEBUG] ⏱️ Aguardando estabilização após marcação...")
-                        await page.wait_for_timeout(1500)
+                        await page.wait_for_timeout(2500)  # Tempo aumentado para garantir estabilização
                     else:
                         print(f"[DEBUG] ❌ ⚠️ FALHA ao marcar conversa visualmente com tag '{complaint_type}' - continuando sem marcação")
                         

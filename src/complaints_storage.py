@@ -24,6 +24,12 @@ COMPLAINTS_HEADER = [
     "produto",
     "variacao", 
     "sku",
+    "order_status",
+    "payment_amount",
+    "payment_currency",
+    "payment_method",
+    "payment_time",
+    "total_orders",
     "complaint_type",
     "confidence",
     "keywords_found",
@@ -54,12 +60,21 @@ def save_complaints(complaints: List[ComplaintInfo], order_info: Dict[str, Any] 
     json_entries = []
     
     for complaint in complaints:
-        # Dados do pedido
-        order_id = order_info.get("orderId", "") if order_info else ""
+        # Dados do pedido principal (primeiro pedido)
+        primary_order = order_info.get("primaryOrder", {}) if order_info else {}
+        order_id = primary_order.get("orderId", "") or order_info.get("orderId", "") if order_info else ""
         buyer_name = order_info.get("buyer_name", "") if order_info else ""
-        produto = order_info.get("title", "") if order_info else ""
-        variacao = order_info.get("variation", "") if order_info else ""
-        sku = order_info.get("sku", "") if order_info else ""
+        produto = primary_order.get("title", "") or order_info.get("title", "") if order_info else ""
+        variacao = primary_order.get("variation", "") or order_info.get("variation", "") if order_info else ""
+        sku = primary_order.get("sku", "") or order_info.get("sku", "") if order_info else ""
+        
+        # Dados do status e pagamento
+        order_status = primary_order.get("status", "") or order_info.get("status", "") if order_info else ""
+        payment_amount = primary_order.get("paymentAmount", "") or order_info.get("paymentAmount", "") if order_info else ""
+        payment_currency = primary_order.get("paymentCurrency", "") or order_info.get("paymentCurrency", "") if order_info else ""
+        payment_method = primary_order.get("paymentMethod", "") or order_info.get("paymentMethod", "") if order_info else ""
+        payment_time = primary_order.get("paymentTime", "") or order_info.get("paymentTime", "") if order_info else ""
+        total_orders = order_info.get("totalOrders", 1) if order_info else 1
         
         # Converte tipo de reclamação para português
         complaint_type_pt = {
@@ -72,22 +87,28 @@ def save_complaints(complaints: List[ComplaintInfo], order_info: Dict[str, Any] 
         relevant_messages = " | ".join(msg.strip().replace("\n", " ") for msg in complaint.messages)
         keywords_str = ", ".join(complaint.keywords_found)
         
-        # Linha para CSV
+        # Linha para CSV com todas as colunas organizadas
         row = [
-            timestamp,
-            complaint.detected_at,
-            order_id,
-            buyer_name,
-            produto,
-            variacao,
-            sku,
-            complaint_type_pt,
-            f"{complaint.confidence:.2f}",
-            keywords_str,
-            relevant_messages,
-            "Novo",  # status inicial
+            timestamp,                    # timestamp_utc
+            complaint.detected_at,        # detected_at
+            order_id,                     # order_id
+            buyer_name,                   # buyer_name
+            produto,                      # produto
+            variacao,                     # variacao
+            sku,                          # sku
+            order_status,                 # order_status
+            payment_amount,               # payment_amount
+            payment_currency,             # payment_currency
+            payment_method,               # payment_method
+            payment_time,                 # payment_time
+            total_orders,                 # total_orders
+            complaint_type_pt,            # complaint_type
+            f"{complaint.confidence:.2f}", # confidence
+            keywords_str,                 # keywords_found
+            relevant_messages,            # relevant_messages
+            "Novo",                       # status
             "Sim" if complaint.confidence >= 0.5 else "Não",  # marked_for_review
-            ""  # notes (vazio inicialmente)
+            ""                            # notes
         ]
         rows_to_save.append(row)
         
@@ -225,3 +246,4 @@ def get_complaints_summary() -> Dict[str, Any]:
         "high_confidence": high_confidence,
         "by_type": by_type
     }
+

@@ -24,12 +24,75 @@ class ComplaintDetector:
     """Detecta reclamações de falta de peças/quebras nas mensagens dos clientes"""
     
     def __init__(self):
-        # Padrões para falta de peças/partes
+        # Padrões para falta de peças/partes - LISTA COMPLETA FORNECIDA PELO USUÁRIO
         self.missing_parts_patterns = [
+            # Palavras básicas de falta
+            r"\bfaltando\b",
+            r"\bfaltou\b", 
+            r"\bestá faltando\b",
+            r"\bcontinua faltando\b",
+            r"\bficou faltando\b",
+            r"\bainda falta\b",
+            
+            # Não recebimento
+            r"\bnão veio\b",
+            r"\bnão veio junto\b", 
+            r"\bnão foi enviado\b",
+            r"\bnão recebi\b",
+            r"\bnão recebi tudo\b",
+            r"\bnão chegou\b",
+            r"\bnão chegou completo\b",
+            r"\bnão mandaram\b",
+            r"\bnão enviaram\b",
+            r"\bnão entregaram\b",
+            
+            # Veio incompleto/errado
+            r"\bveio sem\b",
+            r"\bveio incompleto\b",
+            r"\bveio errado\b",
+            r"\bveio faltando\b",
+            r"\bveio pela metade\b",
+            r"\bveio quebrado\b",  # muitas vezes usam "quebrado" quando falta peça importante
+            
+            # Produto/pedido incompleto
+            r"\bpedido incompleto\b",
+            r"\bproduto incompleto\b",
+            r"\bpeça não enviada\b",
+            r"\bpeça não entregue\b",
+            r"\bpeça faltante\b",
+            r"\bsem a peça\b",
+            r"\bincompleto\b",
+            r"\bincompleta\b", 
+            r"\bincompletos\b",
+            
+            # Erros de escrita comuns (clientes digitam rápido/irritados)
+            r"\bfalatando\b",
+            r"\bfalatou\b",
+            r"\bn veio\b",
+            r"\bnaum veio\b",
+            r"\bn recebi\b",
+            r"\bñ veio\b",
+            r"\bñ recebi\b",
+            r"\bencompleto\b",
+            r"\bincopmleto\b",
+            r"\bfaltao\b",
+            r"\bfalto\b",
+            
+            # Expressões compostas
+            r"\bveio errado e faltando\b",
+            r"\bproduto veio faltando peça\b",
+            r"\bnão mandaram tudo\b",
+            r"\bnão enviaram completo\b",
+            r"\bnão está completo\b",
+            r"\bestá incompleto\b",
+            r"\bveio sem a peça\b",
+            r"\bveio faltando parte do produto\b",
+            r"\bsó veio metade\b",
+            
+            # Padrões originais mantidos para compatibilidade
             r"\b(?:falta|faltou|faltando|não veio|nao veio|não chegou|nao chegou)\b.*\b(?:peça|peca|peças|pecas|parte|partes|item|itens)\b",
             r"\b(?:veio|chegou)\b.*\b(?:sem|faltando|menos)\b.*\b(?:peça|peca|peças|pecas|parte|partes)\b",
             r"\b(?:peça|peca|peças|pecas|parte|partes)\b.*\b(?:falta|faltou|faltando|não veio|nao veio)\b",
-            r"\b(?:incompleto|incompleta|não completo|nao completo)\b",
             r"\b(?:só|so|apenas|somente)\b.*\b(?:veio|chegou)\b",
             r"\b(?:cadê|onde está|onde esta|sumiu)\b.*\b(?:peça|peca|parte|item)\b",
             r"\b(?:esqueceram|esqueceu)\b.*\b(?:de mandar|de enviar|enviar)\b",

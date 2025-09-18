@@ -41,8 +41,9 @@ class ComplaintClassifier:
         if not buyer_only:
             return False, "Nenhuma mensagem do comprador encontrada"
         
-        # Limita a análise às últimas 20 mensagens como solicitado
-        recent_messages = buyer_only[-20:]
+        # Usa TODAS as mensagens do comprador para análise mais precisa
+        # (mantém as últimas 50 para evitar análises excessivamente longas)
+        recent_messages = buyer_only[-50:] if len(buyer_only) > 50 else buyer_only
         
         # OTIMIZAÇÃO: Verifica primeiro se é conversa normal (pula rapidamente)
         if self.detector.is_normal_conversation(recent_messages):
