@@ -128,52 +128,75 @@ HTML = Template(
         </div>
 
         <div class="card">
-          <h3 style="margin-top:0;">🔍 Monitor de Reclamações</h3>
-          <div id="reading"></div>
-          <label style="display:block;margin-top:8px;">📊 Análise da Conversa</label>
-          <textarea id="proposed" rows="6" style="width:100%;" readonly></textarea>
-          <div class="row" style="margin-top:8px;">
-            <small class="mut">💡 O sistema agora apenas detecta e salva reclamações para revisão manual</small>
-          </div>
-          <div class="row" style="margin-top:4px;">
-            <small class="mut">🔧 Para login manual: Clique "Iniciar Sessão Manual" → Faça login no navegador → Use "Enviar código" se necessário</small>
-          </div>
-          <div class="row" style="margin-top:8px;">
-            <a class="secondary" href="/export-cases" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">Exportar CSV</a>
-            <a class="secondary" href="/export-complaints" style="text-decoration:none;padding:10px 14px;border:1px solid var(--br);">📊 Exportar Reclamações</a>
-          </div>
-
-          <div class="row" style="margin-top:8px;">
-            <button id="btnTakeControl" class="secondary">Assumir controle</button>
-            <button id="btnReleaseControl" class="secondary" disabled>Voltar</button>
-          </div>
-
-          <div class="row" style="margin-top:8px;">
-            <button id="btnInitManual" class="secondary">🌐 Iniciar Sessão Manual</button>
-            <button id="btnCloseModal" class="secondary">Fechar modal</button>
-          </div>
-
-          <div class="row" style="margin-top:8px;">
-            <input id="codeInput" type="text" placeholder="Código de verificação" style="width:180px;">
-            <button id="btnSendCode">Enviar código</button>
-          </div>
-
-          <h4 style="margin-top:16px;">Conectar ao Duoke</h4>
-          <p class="mut" style="margin-top:0">Faça login aqui para salvar a sessão (cookies) como <code>storage_state.json</code>. O bot reutiliza essa sessão automaticamente.</p>
-          <form id="duoke-connect" onsubmit="return false;" style="display:flex; flex-direction:column; gap:8px; max-width:280px;">
-            <input name="email" type="email" placeholder="Email Duoke" required />
-            <input name="password" type="password" placeholder="Senha Duoke" required />
-            <input name="code" type="text" placeholder="Código de verificação" />
-            <div class="row">
-              <button id="btnDuokeConnect" type="submit">Conectar ao Duoke</button>
-              <button id="btnDuokeDisconnect" type="button" class="secondary">Desconectar</button>
+          <h3 style="margin-top:0;">🔍 Monitor de Conversas</h3>
+          
+          <!-- Status do Sistema -->
+          <div id="systemStatus" class="card" style="margin-bottom:16px; background:var(--card); border:1px solid var(--br); padding:12px;">
+            <div class="row" style="justify-content:space-between;">
+              <div>
+                <strong id="currentStatus">Sistema Inativo</strong>
+                <br><small class="mut" id="statusDetails">Aguardando início...</small>
+              </div>
+              <div style="text-align:right;">
+                <div id="conversationCounter" style="font-size:24px; font-weight:bold; color:var(--acc);">0</div>
+                <small class="mut">Conversas Processadas</small>
+              </div>
             </div>
-          </form>
-          <small id="duokeHint" class="mut"></small>
+          </div>
 
-          <h4>Logs</h4>
-          <div id="log"></div>
-          <small class="mut">Dica: mantenha esta aba aberta para não derrubar o WebSocket atrás de proxies.</small>
+          <!-- Monitor de Conversas Atual -->
+          <div id="currentConversation" class="card" style="margin-bottom:16px; background:#0a0a0b; border:1px solid #1a1b20; padding:12px;">
+            <h4 style="margin-top:0;">📋 Conversa Atual</h4>
+            <div id="conversationInfo" style="margin-bottom:8px;">
+              <div class="row">
+                <span class="mut">Pedido:</span> <span id="currentOrderId">-</span>
+                <span class="mut">Comprador:</span> <span id="currentBuyer">-</span>
+              </div>
+              <div class="row" style="margin-top:4px;">
+                <span class="mut">Status:</span> <span id="currentOrderStatus">-</span>
+                <span class="mut">Produto:</span> <span id="currentProduct">-</span>
+              </div>
+            </div>
+            <div id="reading" style="max-height:200px; overflow-y:auto;"></div>
+          </div>
+
+          <!-- Análise da Conversa -->
+          <label style="display:block;margin-top:8px;">🤖 Análise Automática</label>
+          <div id="analysisResult" style="background:#0a0a0b; border:1px solid #1a1b20; border-radius:8px; padding:10px; margin-bottom:8px; min-height:60px; font-family:monospace; font-size:12px; white-space:pre-wrap;">Aguardando análise...</div>
+
+          <!-- Ações Rápidas -->
+          <div class="row" style="margin-top:8px;">
+            <a class="secondary" href="/export-complaints" style="text-decoration:none;padding:8px 12px;border:1px solid var(--br);font-size:12px;">📊 Reclamações</a>
+            <button id="btnCloseModal" class="secondary" style="padding:8px 12px;font-size:12px;">Fechar Modal</button>
+          </div>
+
+          <!-- Controles de Login (Colapsável) -->
+          <details style="margin-top:16px;">
+            <summary style="cursor:pointer; color:var(--mut);">🔧 Controles de Login</summary>
+            <div style="margin-top:8px; padding:8px; border:1px solid var(--br); border-radius:8px;">
+              <div class="row" style="margin-bottom:8px;">
+                <button id="btnInitManual" class="secondary" style="font-size:12px;">🌐 Iniciar Sessão</button>
+                <input id="codeInput" type="text" placeholder="Código 2FA" style="width:120px;font-size:12px;">
+                <button id="btnSendCode" style="font-size:12px;">Enviar</button>
+              </div>
+              
+              <form id="duoke-connect" onsubmit="return false;" style="display:flex; flex-direction:column; gap:6px; max-width:280px;">
+                <input name="email" type="email" placeholder="Email Duoke" style="font-size:12px;" />
+                <input name="password" type="password" placeholder="Senha Duoke" style="font-size:12px;" />
+                <div class="row">
+                  <button id="btnDuokeConnect" type="submit" style="font-size:12px;">Conectar</button>
+                  <button id="btnDuokeDisconnect" type="button" class="secondary" style="font-size:12px;">Desconectar</button>
+                </div>
+              </form>
+              <small id="duokeHint" class="mut"></small>
+            </div>
+          </details>
+
+          <!-- Logs (Colapsável) -->
+          <details style="margin-top:16px;">
+            <summary style="cursor:pointer; color:var(--mut);">📜 Logs do Sistema</summary>
+            <div id="log" style="height:150px; overflow:auto; font-family:monospace; background:#0a0a0b; border:1px solid #1a1b20; border-radius:8px; padding:8px; margin-top:8px; font-size:11px;"></div>
+          </details>
         </div>
       </div>
     </section>
@@ -334,12 +357,23 @@ const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
 const screen = document.getElementById('screen');
 const reading = document.getElementById('reading');
-const proposed = document.getElementById('proposed');
+const analysisResult = document.getElementById('analysisResult');
 const logEl = document.getElementById('log');
 const statusEl = document.getElementById('status');
 const duokeStatusEl = document.getElementById('duokeStatus');
 const duokeHint = document.getElementById('duokeHint');
 const productForm = document.getElementById('product-form');
+
+// Novos elementos do monitor
+const currentStatus = document.getElementById('currentStatus');
+const statusDetails = document.getElementById('statusDetails');
+const conversationCounter = document.getElementById('conversationCounter');
+const currentOrderId = document.getElementById('currentOrderId');
+const currentBuyer = document.getElementById('currentBuyer');
+const currentOrderStatus = document.getElementById('currentOrderStatus');
+const currentProduct = document.getElementById('currentProduct');
+
+let conversationCount = 0;
 
 screen.addEventListener('click', async ev => {
   const rect = screen.getBoundingClientRect();
@@ -579,25 +613,71 @@ function connectWS(){
   };
   ws.onmessage = (ev) => {
     const data = JSON.parse(ev.data);
+    
     if (data.screen) {
       screen.src = "data:image/png;base64," + data.screen;
     }
+    
     if (data.snapshot) {
       const s = data.snapshot;
-      reading.innerHTML = '';
-      (s.reading || []).forEach(pair => {
-        const d = document.createElement('div');
-        d.className = 'msg ' + (pair[0]==='buyer'?'role-buyer':'role-seller');
-        d.textContent = pair[1];
-        reading.appendChild(d);
-      });
-      if (s.proposed !== undefined && document.activeElement !== proposed) {
-        proposed.value = s.proposed || '';
-      }
+      
+      // Atualiza status do sistema
       if (typeof s.running === 'boolean') {
         statusEl.textContent = s.running ? 'RUNNING' : 'IDLE';
+        if (currentStatus) {
+          currentStatus.textContent = s.running ? '🟢 Sistema Ativo' : '🔴 Sistema Inativo';
+          statusDetails.textContent = s.running ? 'Monitorando conversas...' : 'Aguardando início...';
+        }
+        
+        // Reset contador quando sistema para
+        if (!s.running && conversationCounter) {
+          conversationCount = 0;
+          conversationCounter.textContent = '0';
+          // Limpa informações da conversa atual
+          if (currentOrderId) currentOrderId.textContent = '-';
+          if (currentBuyer) currentBuyer.textContent = '-';
+          if (currentOrderStatus) currentOrderStatus.textContent = '-';
+          if (currentProduct) currentProduct.textContent = '-';
+          if (analysisResult) analysisResult.textContent = 'Sistema parado';
+          reading.innerHTML = '';
+        }
+      }
+      
+      // Atualiza conversas lidas
+      if (s.reading && s.reading.length > 0) {
+        reading.innerHTML = '';
+        (s.reading || []).forEach(pair => {
+          const d = document.createElement('div');
+          d.className = 'msg ' + (pair[0]==='buyer'?'role-buyer':'role-seller');
+          d.textContent = pair[1];
+          reading.appendChild(d);
+        });
+        
+        // Incrementa contador se há nova conversa
+        if (s.reading.length > 0 && s.running) {
+          conversationCount++;
+          if (conversationCounter) {
+            conversationCounter.textContent = conversationCount;
+          }
+        }
+      }
+      
+      // Atualiza análise
+      if (s.proposed !== undefined) {
+        if (analysisResult) {
+          analysisResult.textContent = s.proposed || 'Aguardando análise...';
+        }
+      }
+      
+      // Atualiza informações da conversa atual
+      if (s.order_info) {
+        if (currentOrderId) currentOrderId.textContent = s.order_info.orderId || '-';
+        if (currentBuyer) currentBuyer.textContent = s.order_info.buyer_name || '-';
+        if (currentOrderStatus) currentOrderStatus.textContent = s.order_info.status || '-';
+        if (currentProduct) currentProduct.textContent = s.order_info.title || '-';
       }
     }
+    
     if (data.logline) {
       const needScroll = (logEl.scrollTop + logEl.clientHeight + 10) >= logEl.scrollHeight;
       logEl.textContent += (logEl.textContent ? '\n' : '') + data.logline;
@@ -610,21 +690,7 @@ connectWS();
 
 // Botões sendBtn e skipBtn foram removidos - sistema não responde mais automaticamente
 
-// Event listeners para controle manual
-const takeBtn = document.getElementById('btnTakeControl');
-const releaseBtn = document.getElementById('btnReleaseControl');
-if (takeBtn && releaseBtn) {
-  takeBtn.onclick = async () => {
-    await fetch('/action/take-control', {method:'POST'});
-    takeBtn.disabled = true;
-    releaseBtn.disabled = false;
-  };
-  releaseBtn.onclick = async () => {
-    await fetch('/action/release-control', {method:'POST'});
-    takeBtn.disabled = false;
-    releaseBtn.disabled = true;
-  };
-}
+// Controles de controle manual removidos - não são mais necessários no novo sistema
 
 // Event listener para fechar modal
 const btnCloseModal = document.getElementById('btnCloseModal');
@@ -1168,15 +1234,18 @@ async def _run_cycle(run_once: bool):
 
     # Hook para UI ver o que foi lido e análise de reclamações
     async def hook(pairs, buyer_only, order_info=None) -> tuple[bool, str]:
+        # Primeira atualização - mostra que está analisando
         ws_broadcast(
             {
                 "snapshot": {
                     "reading": [list(p) for p in pairs],
-                    "proposed": "Analisando conversas para detectar reclamações...",
+                    "proposed": "🔍 Analisando conversa...",
                     "running": True,
+                    "order_info": order_info or {}
                 }
             }
         )
+        
         flagged, analysis = decide_reply(pairs, buyer_only, order_info)
         
         # Mostra resultado da análise de forma otimizada
@@ -1186,6 +1255,7 @@ async def _run_cycle(run_once: bool):
             display_message += "✅ Conversa normal detectada\n"
             display_message += f"📋 {analysis}\n\n"
             display_message += "⏭️ Pulando para próxima conversa"
+            status_icon = "✅"
         elif flagged:
             # Reclamação detectada - display completo
             display_message = "🚨 RECLAMAÇÃO DETECTADA!\n\n"
@@ -1193,19 +1263,24 @@ async def _run_cycle(run_once: bool):
             display_message += "🏷️ Marcando automaticamente no Duoke\n"
             display_message += "💾 Salvando para revisão manual\n"
             display_message += "⏱️ Processamento completo em andamento..."
+            status_icon = "🚨"
         else:
             # Outros casos
             display_message = "🔍 ANÁLISE CONCLUÍDA\n\n"
             display_message += "✅ Sem problemas específicos\n"
             display_message += f"📋 {analysis}\n\n"
             display_message += "⏭️ Seguindo para próxima conversa"
+            status_icon = "ℹ️"
         
+        # Atualização final com resultado completo
         ws_broadcast(
             {
                 "snapshot": {
                     "reading": [list(p) for p in pairs],
                     "proposed": display_message,
                     "running": True,
+                    "order_info": order_info or {},
+                    "analysis_status": status_icon
                 }
             }
         )
