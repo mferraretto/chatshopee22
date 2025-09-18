@@ -1,6 +1,15 @@
 # app_ui.py
 # --- Força event loop correto no Windows (necessário para subprocess do Playwright) ---
 import sys, asyncio
+import os
+import logging
+
+# Configuração de logging para Cloud Run
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 if sys.platform.startswith("win"):
     try:
@@ -27,16 +36,32 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, File
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Template
 
-from src.duoke import DuokeBot
-from src.config import settings
-from src.complaint_classifier import decide_reply
-from src.rules import load_rules, save_rules
-from src.cases import export_to_excel, HEADER
-from src.history import fetch_all_histories
-from src.firebase_client import fetch_all_cases, mark_case_resolved
-from src.complaints_storage import get_pending_complaints, get_complaints_summary, mark_complaint_reviewed, COMPLAINTS_CSV_PATH
-from openpyxl import Workbook
-from playwright.async_api import TimeoutError as PWTimeoutError
+# Importações com tratamento de erro robusto para Cloud Run
+try:
+    from src.duoke import DuokeBot
+    from src.config import settings
+    from src.complaint_classifier import decide_reply
+    from src.rules import load_rules, save_rules
+    from src.cases import export_to_excel, HEADER
+    from src.history import fetch_all_histories
+    from src.firebase_client import fetch_all_cases, mark_case_resolved
+    from src.complaints_storage import get_pending_complaints, get_complaints_summary, mark_complaint_reviewed, COMPLAINTS_CSV_PATH
+    from openpyxl import Workbook
+    logger.info("✅ Todos os módulos importados com sucesso")
+except ImportError as e:
+    logger.error(f"❌ Erro ao importar módulos: {e}")
+    # Importações fallback para manter a aplicação funcionando
+    settings = None
+    decide_reply = None
+
+try:
+    from playwright.async_api import TimeoutError as PWTimeoutError
+    logger.info("✅ Playwright importado com sucesso")
+except ImportError as e:
+    logger.warning(f"⚠️ Playwright não disponível: {e}")
+    # Define uma classe fallback
+    class PWTimeoutError(Exception):
+        pass
 
 # ===== Estado global simples =====
 RUNNING: bool = False
@@ -817,7 +842,19 @@ if (btnDuokeDisconnect) {
 """
 )
 
-app = FastAPI()
+# Inicialização da aplicação FastAPI com logs detalhados
+logger.info("🚀 Inicializando aplicação FastAPI...")
+
+try:
+    app = FastAPI(
+        title="Duoke Console",
+        description="Sistema de monitoramento de reclamações",
+        version="1.0.0"
+    )
+    logger.info("✅ FastAPI inicializada com sucesso")
+except Exception as e:
+    logger.error(f"❌ Erro ao inicializar FastAPI: {e}")
+    raise
 
 
 @app.head("/")
@@ -829,7 +866,24 @@ async def root_head() -> Response:
 @app.get("/healthz")
 async def health_check() -> dict:
     """Health check endpoint used by deployment platforms."""
-    return {"status": "ok"}
+    logger.info("🏥 Health check solicitado")
+    try:
+        # Verifica se os componentes essenciais estão funcionando
+        status = {
+            "status": "ok",
+            "timestamp": time.time(),
+            "version": "1.0.0",
+            "components": {
+                "fastapi": "ok",
+                "settings": "ok" if settings else "unavailable",
+                "logs": len(LOGS)
+            }
+        }
+        logger.info(f"✅ Health check OK: {status}")
+        return status
+    except Exception as e:
+        logger.error(f"❌ Health check falhou: {e}")
+        return {"status": "error", "error": str(e)}
 
 
 @app.get("/export-cases")
@@ -1489,3 +1543,50 @@ async def action_release_control():
     MANUAL = False
     log("[UI] controle manual desativado.")
     return JSONResponse({"ok": True})
+
+
+# ===== Startup event para logs detalhados =====
+@app.on_event("startup")
+async def startup_event():
+    logger.info("🎉 Aplicação iniciando...")
+    logger.info(f"📁 Diretório de trabalho: {os.getcwd()}")
+    logger.info(f"🐍 Python version: {sys.version}")
+    logger.info(f"🌐 PORT: {os.getenv('PORT', 'não definida')}")
+    logger.info(f"🏠 HOST: {os.getenv('HOST', 'não definida')}")
+    
+    # Cria diretórios necessários
+    try:
+        for directory in ["data", "sessions", "pw-user-data"]:
+            Path(directory).mkdir(exist_ok=True)
+        logger.info("✅ Diretórios criados com sucesso")
+    except Exception as e:
+        logger.error(f"❌ Erro ao criar diretórios: {e}")
+
+@app.on_event("shutdown") 
+async def shutdown_event():
+    logger.info("👋 Aplicação sendo finalizada...")
+
+
+# ===== Ponto de entrada para uvicorn =====
+if __name__ == "__main__":
+    import uvicorn
+    
+    try:
+        port = int(os.getenv("PORT", 8080))
+        host = os.getenv("HOST", "0.0.0.0")
+        
+        logger.info(f"🚀 Iniciando servidor FastAPI")
+        logger.info(f"🌐 Host: {host}")
+        logger.info(f"🔌 Porta: {port}")
+        
+        uvicorn.run(
+            "app_ui:app", 
+            host=host, 
+            port=port, 
+            log_level="info",
+            access_log=True,
+            timeout_keep_alive=120
+        )
+    except Exception as e:
+        logger.error(f"❌ Erro crítico ao iniciar servidor: {e}")
+        sys.exit(1)
